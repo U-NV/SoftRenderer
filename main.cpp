@@ -6,6 +6,12 @@
 #include <cmath>
 #include <iostream>
 
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "SDL.h"
+#include "SDL_revision.h"
+
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red   = TGAColor(255, 0,   0,   255);
@@ -14,39 +20,160 @@ void printTGAColor(TGAColor color) {
 	printf("r:%d g:%d b:%d\n", color.r, color.g, color.b);
 }
 
-const int width = 800;
-const int height = 800;
+//Screen dimension constants
+const int SCREEN_WIDTH = 640;
+const int SCREEN_HEIGHT = 480;
+
+//Starts up SDL and creates window
+bool init();
+
+//Frees media and shuts down SDL
+void close();
+
+//The window we'll be rendering to
+SDL_Window* gWindow = NULL;
+
+//The window renderer
+SDL_Renderer* gRenderer = NULL;
+
+
+void SDLDrawPixel(int x, int y)
+{
+	SDL_RenderDrawPoint(gRenderer, x, SCREEN_HEIGHT - 1 - y);
+}
 
 int main(int argc, char** argv) {
-	TGAImage frame(width, height, TGAImage::RGB);
 
-	std::vector<Vector2i> vertexBuffer =
+	if (!init())
 	{
-		Vector2i(0, 0),
-		Vector2i(0, 99),
-		Vector2i(99, 0),
-		Vector2i(99, 0),
-		Vector2i(0, 99),
-		Vector2i(99,99)
-	};
-	
-	std::vector<TGAColor> colorBuffer =
+		printf("Failed to initialize!\n");
+	}
+	else
 	{
-		TGAColor(255, 0, 0,255),
-		TGAColor(0, 255, 0,255),
-		TGAColor(0, 0, 255,255),
+		//Main loop flag
+		bool quit = false;
+		//Event handler
+		SDL_Event e;
 
-		TGAColor(0, 0, 255,255),
-		TGAColor(0, 255, 0,255),
-		TGAColor(255, 0, 0,255)
-		
-	};
+		//While application is running
+		while (!quit)
+		{
+			//Handle events on queue
+			while (SDL_PollEvent(&e) != 0)
+			{
+				//User requests quit
+				if (e.type == SDL_QUIT)
+				{
+					quit = true;
+				}
+			}
 
-	drawTriangle2D(vertexBuffer, colorBuffer, frame);
+			//Clear screen
+			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
+			SDL_RenderClear(gRenderer);
 
-	//image.set(52, 41, red);
-	frame.flip_vertically(); // i want to have the origin at the left bottom corner of the image
-	frame.write_tga_file("output.tga");
+			std::vector<Vector> vertexBuffer =
+			{
+				Vector(0, 0),
+				Vector(0, 100),
+				Vector(100, 0),
+				Vector(86, 45),
+				Vector(46, 59),
+				Vector(85,49)
+			};
+
+			std::vector<TGAColor> colorBuffer =
+			{
+				TGAColor(255, 0, 0,255),
+				TGAColor(0, 255, 0,255),
+				TGAColor(0, 0, 255,255),
+
+				TGAColor(0, 0, 255,255),
+				TGAColor(0, 255, 0,255),
+				TGAColor(255, 0, 0,255)
+
+			};
+
+			drawTriangle2D(vertexBuffer, colorBuffer, frame);
+
+
+
+			//Draw vertical line of yellow dots
+			SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0x00, 0xFF);
+			for (int i = 0; i < SCREEN_HEIGHT; i++)
+			{
+				SDLDrawPixel(SCREEN_WIDTH / 2, i);
+			}
+
+			//Update screen
+			SDL_RenderPresent(gRenderer);
+		}
+	}
+
+	//Free resources and close SDL
+	close();
+
+	//TGAImage frame(width, height, TGAImage::RGB);
+
+
+
+	////image.set(52, 41, red);
+	//frame.flip_vertically(); // i want to have the origin at the left bottom corner of the image
+	//frame.write_tga_file("output.tga");
 	return 0;
 }
 
+
+
+bool init()
+{
+	//Initialization flag
+	bool success = true;
+
+	//Initialize SDL
+	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+	{
+		printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
+		success = false;
+	}
+	else
+	{
+		//Set texture filtering to linear
+		if (!SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1"))
+		{
+			printf("Warning: Linear texture filtering not enabled!");
+		}
+
+		//Create window
+		gWindow = SDL_CreateWindow("Taurus", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+		if (gWindow == NULL)
+		{
+			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
+			success = false;
+		}
+		else
+		{
+			//Create renderer for window
+			gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
+			if (gRenderer == NULL)
+			{
+				printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
+				success = false;
+			}
+		}
+	}
+
+	return success;
+}
+
+void close()
+{
+	//Destroy window    
+	SDL_DestroyRenderer(gRenderer);
+	SDL_DestroyWindow(gWindow);
+	gWindow = NULL;
+	gRenderer = NULL;
+
+	//Quit SDL subsystems
+	SDL_Quit();
+}

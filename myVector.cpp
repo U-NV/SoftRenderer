@@ -1,35 +1,44 @@
 #include "myVector.h"
 
-Vector2i Vector2i::operator+(const Vector2i& b)
+Vector Vector::operator+(const Vector& b)
 {
-    Vector2i temp;
+    Vector temp;
     temp.x = this->x + b.x;
     temp.y = this->y + b.y;
+    temp.z = this->z + b.z;
+    temp.w = this->w + b.w;
     return temp;
 }
-Vector2i Vector2i::operator-(const Vector2i& b)
+Vector Vector::operator-(const Vector& b)
 {
-    Vector2i temp;
+    Vector temp;
     temp.x = this->x - b.x;
     temp.y = this->y - b.y;
+    temp.z = this->z - b.z;
+    temp.w = this->w - b.w;
     return temp;
 }
-Vector2i Vector2i::operator*(const int& a)
+Vector Vector::operator*(const int& b)
 {
-    Vector2i temp;
-    temp.x = this->x*a;
-    temp.y = this->y*a;
+    Vector temp;
+    temp.x = this->x * b;
+    temp.y = this->y * b;
+    temp.z = this->z * b;
+    temp.w = this->w * b;
     return temp;
 }
 
-int Vector2i::operator*(const Vector2i& b)
+Vector Vector::operator/(const int& b)
 {
-    return this->x*b.x + this->y*b.y;
+    Vector temp;
+    temp.x = this->x / b;
+    temp.y = this->y / b;
+    temp.z = this->z / b;
+    temp.w = this->w / b;
+    return temp;
 }
 
-std::ostream& operator<<(std::ostream& out, Vector2i& b)
+int Vector::operator*(const Vector& b)
 {
-    out << b.x << "," << b.y;
-    return out;
-    // TODO: 在此处插入 return 语句
+    return this->x * b.x + this->y * b.y + this->z * b.z + this->w * b.w;
 }

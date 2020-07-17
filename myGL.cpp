@@ -62,7 +62,7 @@ void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
     }
 }
 
-void drawLine(Vector2i a, Vector2i b, TGAImage& image, TGAColor color) {
+void drawLine(Vector a, Vector b, TGAImage& image, TGAColor color) {
     int x0 = a.x;
     int y0 = a.y;
     int x1 = b.x;
@@ -71,7 +71,7 @@ void drawLine(Vector2i a, Vector2i b, TGAImage& image, TGAColor color) {
 }
 
 
-void drawTriangle2D(std::vector<Vector2i> vertexBuffer, std::vector<TGAColor> colorBuffer, TGAImage& image) {
+void drawTriangle2D(std::vector<Vector> vertexBuffer, std::vector<TGAColor> colorBuffer, TGAImage& image) {
 	int vertexLength = vertexBuffer.size();
 	for (int i = 0; i < vertexLength; i += 3) {
 		if (i + 3 > vertexLength)break;
@@ -89,24 +89,24 @@ void drawTriangle2D(std::vector<Vector2i> vertexBuffer, std::vector<TGAColor> co
 			//printf("(%d,%d) - r:%d g:%d b:%d\n", trianglePoint[j].vertex.x, trianglePoint[j].vertex.y, trianglePoint[j].color.r, trianglePoint[j].color.g, trianglePoint[j].color.b);
 		}
 
-		Vector2i bboxmin(image.get_width() - 1, image.get_height() - 1);
-		Vector2i bboxmax(0, 0);
-		Vector2i clamp(image.get_width() - 1, image.get_height() - 1);
+		Vector bboxmin(image.get_width() - 1, image.get_height() - 1);
+		Vector bboxmax(0, 0);
+		Vector clamp(image.get_width() - 1, image.get_height() - 1);
 		for (int j = 0; j < 3; j++) {
-			bboxmin.x = std::max(0, std::min(bboxmin.x, trianglePoint[j].vertex.x));
+			bboxmin.x = std::max(0.0, std::min(bboxmin.x, trianglePoint[j].vertex.x));
 			bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, trianglePoint[j].vertex.x));
 
-			bboxmin.y = std::max(0, std::min(bboxmin.y, trianglePoint[j].vertex.y));
+			bboxmin.y = std::max(0.0, std::min(bboxmin.y, trianglePoint[j].vertex.y));
 			bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, trianglePoint[j].vertex.y));
 		}
 		//std::cout << "min:" << bboxmin << std::endl;
 		//std::cout << "max:" << bboxmax << std::endl;
-		Vector2i P;
+		Vector P;
 		for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 			for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
-				Vector2i v0 = trianglePoint[2].vertex - trianglePoint[0].vertex;
-				Vector2i v1 = trianglePoint[1].vertex - trianglePoint[0].vertex;
-				Vector2i v2 = P - trianglePoint[0].vertex;
+				Vector v0 = trianglePoint[2].vertex - trianglePoint[0].vertex;
+				Vector v1 = trianglePoint[1].vertex - trianglePoint[0].vertex;
+				Vector v2 = P - trianglePoint[0].vertex;
 
 				//¼ÆËãµã»ý
 				int dot00 = v0 * v0;
