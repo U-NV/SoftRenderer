@@ -1,0 +1,2 @@
+D:\VS_Project\Soft_Renderer\Debug\Soft_Renderer.exe
+D:\VS_Project\Soft_Renderer\Debug\Soft_Renderer.pdb
