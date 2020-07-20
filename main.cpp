@@ -20,8 +20,8 @@ void printTGAColor(TGAColor color) {
 }
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 100;
-const int SCREEN_HEIGHT = 100;
+const int SCREEN_WIDTH = 200;
+const int SCREEN_HEIGHT = 200;
 
 //Starts up SDL and creates window
 bool init();
@@ -66,14 +66,14 @@ int main(int argc, char** argv) {
 			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
 			SDL_RenderClear(gRenderer);
 
-			std::vector<Vector> vertexBuffer =
+			std::vector<Vector<int>> vertexBuffer =
 			{
-				Vector(0, 0),
-				Vector(0, 100),
-				Vector(100, 0),
-				Vector(86, 45),
-				Vector(46, 59),
-				Vector(85,49)
+				Vector<int>(0, 0),
+				Vector<int>(0, 200),
+				Vector<int>(200, 0),
+				Vector<int>(86, 45),
+				Vector<int>(46, 59),
+				Vector<int>(85,49)
 			};
 
 			std::vector<TGAColor> colorBuffer =
@@ -90,8 +90,6 @@ int main(int argc, char** argv) {
 
 			drawTriangle2D(vertexBuffer, colorBuffer, gRenderer, gWindow);
 
-
-
 			//Draw vertical line of yellow dots
 
 			//Update screen
@@ -102,13 +100,6 @@ int main(int argc, char** argv) {
 	//Free resources and close SDL
 	close();
 
-	//TGAImage frame(width, height, TGAImage::RGB);
-
-
-
-	////image.set(52, 41, red);
-	//frame.flip_vertically(); // i want to have the origin at the left bottom corner of the image
-	//frame.write_tga_file("output.tga");
 	return 0;
 }
 

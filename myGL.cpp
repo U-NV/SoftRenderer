@@ -1,23 +1,5 @@
 #include"myGL.h"
 
-
-Point3D::Point3D()
-{
-}
-
-Point3D::~Point3D()
-{
-}
-
-Point2D::Point2D()
-{
-}
-
-Point2D::~Point2D()
-{
-}
-
-
 inline double lerp(double a, double b, double rate) {
 	return a + (b - a) * rate;
 }
@@ -71,7 +53,7 @@ void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
     }
 }
 
-void drawLine(Vector a, Vector b, TGAImage& image, TGAColor color) {
+void drawLine(Vector<int> a, Vector<int> b, TGAImage& image, TGAColor color) {
     int x0 = a.x;
     int y0 = a.y;
     int x1 = b.x;
@@ -79,45 +61,32 @@ void drawLine(Vector a, Vector b, TGAImage& image, TGAColor color) {
     drawLine(x0, y0, x1, y1, image, color);
 }
 
-
-void drawTriangle2D(std::vector<Vector> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	int vertexLength = vertexBuffer.size();
 	for (int i = 0; i < vertexLength; i += 3) {
 		if (i + 3 > vertexLength)break;
-		std::vector<Point2D> trianglePoint(3);
-		for (int j = 0; j < 3; j++) {
-			trianglePoint[j].vertex.x = vertexBuffer[i + j].x;
-			trianglePoint[j].vertex.y = vertexBuffer[i + j].y;
 
-			trianglePoint[j].color.r = colorBuffer[i + j].r;
-			trianglePoint[j].color.g = colorBuffer[i + j].g;
-			trianglePoint[j].color.b = colorBuffer[i + j].b;
-			trianglePoint[j].color.a = colorBuffer[i + j].a;
-
-			//trianglePoint[j].vertex.print();
-			//printf("(%d,%d) - r:%d g:%d b:%d\n", trianglePoint[j].vertex.x, trianglePoint[j].vertex.y, trianglePoint[j].color.r, trianglePoint[j].color.g, trianglePoint[j].color.b);
-		}
 		int w = 0, h = 0;
 		SDL_GetWindowSize(gWindow, &w, &h);
-		Vector bboxmin(w - 1, h - 1);
-		Vector bboxmax(0, 0);
-		Vector clamp(w - 1, h - 1);
-
+		Vector<int> bboxmin(w - 1, h - 1);
+		Vector<int> bboxmax(0, 0);
+		Vector<int> clamp(w - 1, h - 1);
 		for (int j = 0; j < 3; j++) {
-			bboxmin.x = std::max(0.0, std::min(bboxmin.x, trianglePoint[j].vertex.x));
-			bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, trianglePoint[j].vertex.x));
+			int vertexId = i + j;
+			bboxmin.x = std::max(0, std::min(bboxmin.x, vertexBuffer[vertexId].x));
+			bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, vertexBuffer[vertexId].x));
 
-			bboxmin.y = std::max(0.0, std::min(bboxmin.y, trianglePoint[j].vertex.y));
-			bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, trianglePoint[j].vertex.y));
+			bboxmin.y = std::max(0, std::min(bboxmin.y, vertexBuffer[vertexId].y));
+			bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, vertexBuffer[vertexId].y));
 		}
 		//std::cout << "min:" << bboxmin << std::endl;
 		//std::cout << "max:" << bboxmax << std::endl;
-		Vector P;
+		Vector<int> P;
 		for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 			for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
-				Vector v0 = trianglePoint[2].vertex - trianglePoint[0].vertex;
-				Vector v1 = trianglePoint[1].vertex - trianglePoint[0].vertex;
-				Vector v2 = P - trianglePoint[0].vertex;
+				Vector<int> v0 = vertexBuffer[i + 2] - vertexBuffer[i];
+				Vector<int> v1 = vertexBuffer[i + 1] - vertexBuffer[i];
+				Vector<int> v2 = P - vertexBuffer[i];
 
 				//¼ÆËãµã»ý
 				int dot00 = v0 * v0;
@@ -132,8 +101,8 @@ void drawTriangle2D(std::vector<Vector> vertexBuffer, std::vector<TGAColor> colo
 				double v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 
 				if ((u >= 0) && (v >= 0) && (u + v < 1)) {
-					TGAColor leftColor = lerp(trianglePoint[0].color, trianglePoint[1].color, u);
-					TGAColor rightColor = lerp(trianglePoint[2].color, trianglePoint[1].color, u);
+					TGAColor leftColor = lerp(colorBuffer[i], colorBuffer[i + 1], u);
+					TGAColor rightColor = lerp(colorBuffer[i + 2], colorBuffer[i + 1], u);
 					TGAColor color = lerp(leftColor, rightColor, v);
 					SDLDrawPixel(gRenderer, gWindow, P.x, P.y, color);
 				}
