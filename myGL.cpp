@@ -54,10 +54,10 @@ void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
 }
 
 void drawLine(Vector<int> a, Vector<int> b, TGAImage& image, TGAColor color) {
-    int x0 = a.x;
-    int y0 = a.y;
-    int x1 = b.x;
-    int y1 = b.y;
+    int x0 = a[0];
+    int y0 = a[1];
+    int x1 = b[0];
+    int y1 = b[1];
     drawLine(x0, y0, x1, y1, image, color);
 }
 
@@ -73,17 +73,17 @@ void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor>
 		Vector<int> clamp(w - 1, h - 1);
 		for (int j = 0; j < 3; j++) {
 			int vertexId = i + j;
-			bboxmin.x = std::max(0, std::min(bboxmin.x, vertexBuffer[vertexId].x));
-			bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, vertexBuffer[vertexId].x));
+			bboxmin[0] = std::max(0, std::min(bboxmin[0], vertexBuffer[vertexId][0]));
+			bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], vertexBuffer[vertexId][0]));
 
-			bboxmin.y = std::max(0, std::min(bboxmin.y, vertexBuffer[vertexId].y));
-			bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, vertexBuffer[vertexId].y));
+			bboxmin[1] = std::max(0, std::min(bboxmin[1], vertexBuffer[vertexId][1]));
+			bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], vertexBuffer[vertexId][1]));
 		}
 		//std::cout << "min:" << bboxmin << std::endl;
 		//std::cout << "max:" << bboxmax << std::endl;
-		Vector<int> P;
-		for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
-			for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
+		Vector<int> P(0,0);
+		for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
+			for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
 				Vector<int> v0 = vertexBuffer[i + 2] - vertexBuffer[i];
 				Vector<int> v1 = vertexBuffer[i + 1] - vertexBuffer[i];
 				Vector<int> v2 = P - vertexBuffer[i];
@@ -104,7 +104,7 @@ void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor>
 					TGAColor leftColor = lerp(colorBuffer[i], colorBuffer[i + 1], u);
 					TGAColor rightColor = lerp(colorBuffer[i + 2], colorBuffer[i + 1], u);
 					TGAColor color = lerp(leftColor, rightColor, v);
-					SDLDrawPixel(gRenderer, gWindow, P.x, P.y, color);
+					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
 				}
 			}
 		}
@@ -118,7 +118,7 @@ void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor>
 //		if (i + 3 > vertexLength)break;
 //		std::vector<Point2D> trianglePoint(3);
 //		for (int j = 0; j < 3; j++) {
-//			trianglePoint[j].vertex.x = vertexBuffer[i + j].x;
+//			trianglePoint[j].vertex[0] = vertexBuffer[i + j].x;
 //			trianglePoint[j].vertex.y = vertexBuffer[i + j].y;
 //
 //			trianglePoint[j].color.r = colorBuffer[i + j].r;

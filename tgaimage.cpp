@@ -255,25 +255,8 @@ TGAColor TGAImage::get(int x, int y) {
 	return TGAColor(data+(x+y*width)*bytespp, bytespp);
 }
 
-TGAColor TGAImage::get(Vector<int> vec2) {
-	int x = vec2.x;
-	int y = vec2.y;
-	if (!data || x < 0 || y < 0 || x >= width || y >= height) {
-		return TGAColor();
-	}
-	return TGAColor(data + (x + y * width) * bytespp, bytespp);
-}
 
 bool TGAImage::set(int x, int y, TGAColor c) {
-	if (!data || x<0 || y<0 || x>=width || y>=height) {
-		return false;
-	}
-	memcpy(data+(x+y*width)*bytespp, c.raw, bytespp);
-	return true;
-}
-bool TGAImage::set(Vector<int> vec2, TGAColor c) {
-	int x = vec2.x;
-	int y = vec2.y;
 	if (!data || x<0 || y<0 || x>=width || y>=height) {
 		return false;
 	}

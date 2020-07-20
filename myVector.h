@@ -9,59 +9,100 @@
 template <typename T>
 class Vector {
 public:
-	T x;
-	T y;
-	T z;
-	T w;
-	int len;
-	Vector() :x(0), y(0), z(0), w(0),len(4) {};
-	Vector(T X, T Y) :x(X), y(Y), z(0), w(0), len(2) {};
-	Vector(T X, T Y, T Z) :x(X), y(Y), z(Z), w(0), len(3) {};
-	Vector(T X, T Y, T Z, T W) :x(X), y(Y), z(Z), w(W), len(4) {};
+    std::vector<T> data;
+
+	Vector(int size){
+        data.resize(size);
+    };
+	Vector(T X, T Y){
+        data.resize(2);
+        data[0] = X;
+        data[1] = Y;
+    };
+	Vector(T X, T Y, T Z){
+        data.resize(3);
+        data[0] = X;
+        data[1] = Y;
+        data[2] = Z;
+    };
+	Vector(T X, T Y, T Z, T W){
+        data.resize(4);
+        data[0] = X;
+        data[1] = Y;
+        data[2] = Z;
+        data[1] = W;
+    };
+    T& operator[] (const int idx) {
+        return data[idx];
+    }
+
+    const T& operator[] (const int idx) const {
+        return data[idx];
+    }
 
     Vector<T> operator+(const Vector<T>& b)
     {
-        Vector<T> temp;
-        temp.x = this->x + b.x;
-        temp.y = this->y + b.y;
-        temp.z = this->z + b.z;
-        temp.w = this->w + b.w;
+        int len = this->data.size();
+        assert(len == b.data.size());
+        Vector<T> temp(len);
+        for (int i = 0; i < len; i++) {
+            temp[i] = this->data[i] + b[i];
+        }
         return temp;
     }
 
     Vector<T> operator-(const Vector<T>& b)
     {
-        Vector<T> temp;
-        temp.x = this->x - b.x;
-        temp.y = this->y - b.y;
-        temp.z = this->z - b.z;
-        temp.w = this->w - b.w;
+        int len = this->data.size();
+        assert(len == b.data.size());
+        Vector<T> temp(len);
+        for (int i = 0; i < len; i++) {
+            temp[i] = this->data[i] - b[i];
+        }
         return temp;
     }
 
     Vector<T> operator*(const T& b)
     {
-        Vector<T> temp;
-        temp.x = this->x * b;
-        temp.y = this->y * b;
-        temp.z = this->z * b;
-        temp.w = this->w * b;
+        int len = this->data.size();
+        Vector<T> temp(len);
+        for (int i = 0; i < len; i++) {
+            temp[i] = this->data[i] * b;
+        }
         return temp;
     }
 
     Vector<T> operator/(const T& b)
     {
-        Vector<T> temp;
-        temp.x = this->x / b;
-        temp.y = this->y / b;
-        temp.z = this->z / b;
-        temp.w = this->w / b;
+        int len = this->data.size();
+        Vector<T> temp(len);
+        for (int i = 0; i < len; i++) {
+            temp[i] = this->data[i] / b;
+        }
         return temp;
     }
 
     T operator*(const Vector<T>& b)
     {
-        return this->x * b.x + this->y * b.y + this->z * b.z + this->w * b.w;
+        int len = this->data.size();
+        assert(len == b.data.size());
+        T sum = 0;
+        for (int i = 0; i < len; i++) {
+            sum += this->data[i] * b[i];
+        }
+        return sum;
+    }
+    
+    T operator/(const Vector<T>& b)
+    {
+        int len = this->data.size();
+        assert(len == b.data.size());
+        Vector<T> temp(len);
+        T sum = 0;
+        for (int i = 0; i < len; i++) {
+            sum += this->data[i] / b[i];
+        }
+        return sum;
     }
 };
 
@@ -70,6 +111,21 @@ template <typename T>
 class  Matrix
 {
 public:
+    int row;
+    int col;
+    std::vector< std::vector<T>> m;
+
+
+    std::vector<T>& operator[] (const int idx) {
+        assert(idx < row);
+        return m[idx];
+    }
+
+    const std::vector<T>& operator[] (const int idx) const {
+        assert(idx < row);
+        return m[idx];
+    }
+
     Matrix(int rows, int cols) :row(rows), col(cols)
     {
         m.resize(rows);
@@ -92,7 +148,7 @@ public:
     {
         for (int i = 0; i < row; i++) {
             for (int j = 0; j < col; j++) {
-                std::cout << m[i][j];
+                std::cout << m[i][j]<<',';
             }
             std::cout << std::endl;
         }
@@ -169,10 +225,7 @@ public:
         return temp;
     }
 
-private:
-	int row;
-	int col;
-	std::vector< std::vector<T>> m;
+
 };
 
 

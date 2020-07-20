@@ -37,7 +37,6 @@ SDL_Renderer* gRenderer = NULL;
 
 
 int main(int argc, char** argv) {
-
 	if (!init())
 	{
 		printf("Failed to initialize!\n");
@@ -61,6 +60,8 @@ int main(int argc, char** argv) {
 					quit = true;
 				}
 			}
+
+			
 
 			//Clear screen
 			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
