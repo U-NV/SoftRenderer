@@ -20,8 +20,8 @@ void printTGAColor(TGAColor color) {
 }
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 200;
-const int SCREEN_HEIGHT = 200;
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
 
 //Starts up SDL and creates window
 bool init();
@@ -36,6 +36,11 @@ SDL_Window* gWindow = NULL;
 SDL_Renderer* gRenderer = NULL;
 
 
+Matrix<double> Model;
+Matrix<double> View;
+Matrix<double> Projection;
+Matrix<double> Viewport;
+
 int main(int argc, char** argv) {
 	if (!init())
 	{
@@ -48,9 +53,17 @@ int main(int argc, char** argv) {
 		//Event handler
 		SDL_Event e;
 
+		//首先执行缩放，接着旋转，最后才是平移
+		Model = translate(0,0,0) * rotate(Vector<double>(0, 0, 1), 0) * scale(5, 5, 1);
+		//Model.identity();
+		View = lookat(Vector<double>(0, 0, 1), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+		Projection = projection(SCREEN_WIDTH, SCREEN_HEIGHT, 1, 5);
+		Matrix<double> MVP = Projection * View * Model;
+		Viewport = viewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+
 		//While application is running
-		while (!quit)
-		{
+		while (!quit){
 			//Handle events on queue
 			while (SDL_PollEvent(&e) != 0)
 			{
@@ -61,20 +74,29 @@ int main(int argc, char** argv) {
 				}
 			}
 
-			
+
 
 			//Clear screen
 			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
 			SDL_RenderClear(gRenderer);
 
-			std::vector<Vector<int>> vertexBuffer =
+			std::vector<Vector<double>> vertexBuffer =
 			{
-				Vector<int>(0, 0),
-				Vector<int>(0, 200),
-				Vector<int>(200, 0),
-				Vector<int>(86, 45),
-				Vector<int>(46, 59),
-				Vector<int>(85,49)
+				Vector<double>(-10, 0,0.1),
+				Vector<double>(0, 10,0.1),
+				Vector<double>(10, 0,0.1),
+
+				//Vector<double>(1, 0,0),
+				//Vector<double>(0, 1,0),
+				//Vector<double>(0, 0,1),
+
+				//Vector<double>(0, 0,0),
+				//Vector<double>(0, 1,0),
+				//Vector<double>(1, 0,0),
+
+				//Vector<double>(0, 0,1),
+				//Vector<double>(0, 0,0),
+				//Vector<double>(1, 0,0),
 			};
 
 			std::vector<TGAColor> colorBuffer =
@@ -83,15 +105,52 @@ int main(int argc, char** argv) {
 				TGAColor(0, 255, 0,255),
 				TGAColor(0, 0, 255,255),
 
-				TGAColor(0, 0, 255,255),
-				TGAColor(0, 255, 0,255),
-				TGAColor(255, 0, 0,255)
+				//TGAColor(0, 0, 255,255),
+				//TGAColor(0, 255, 0,255),
+				//TGAColor(255, 0, 0,255),
+
+				//TGAColor(255, 0, 0,255),
+				//TGAColor(0, 255, 0,255),
+				//TGAColor(0, 0, 255,255),
+
+				//TGAColor(0, 0, 255,255),
+				//TGAColor(0, 255, 0,255),
+				//TGAColor(255, 0, 0,255),
 
 			};
+			std::cout << "Model" << std::endl;
+			Model.print();
+			std::cout << "View" << std::endl;
+			View.print();
+			std::cout << "Projection" << std::endl;
+			Projection.print();
+			
+			std::cout << "Viewport" << std::endl;
+			Viewport.print();
+
+			for (int i = 0; i < vertexBuffer.size(); i++) {
+				Matrix<double> vecToMat = vertexBuffer[i].homogeneous().toMatrix();
+				std::cout << "vecToMat" << std::endl;
+				vecToMat.print();
+				Matrix<double> afterChange = MVP * vecToMat;
+				vertexBuffer[i] = afterChange.toVector();
+				std::cout << "afterChange" << std::endl;
+				vertexBuffer[i].print();
+
+				double w = vertexBuffer[i][3];
+				double rhw = 1.0 / w;
+				vertexBuffer[i][0] = (vertexBuffer[i][0] * rhw + 1.0f) * SCREEN_WIDTH * 0.5f;
+				vertexBuffer[i][1] = (1.0f - vertexBuffer[i][1] * rhw) * SCREEN_HEIGHT * 0.5f;
+				vertexBuffer[i][2] = vertexBuffer[i][2] * rhw;
+				vertexBuffer[i][3] = 1.0f;
+
+				std::cout << "view" << std::endl;
+				vertexBuffer[i].print();
+				
+			}
 
 			drawTriangle2D(vertexBuffer, colorBuffer, gRenderer, gWindow);
 
-			//Draw vertical line of yellow dots
 
 			//Update screen
 			SDL_RenderPresent(gRenderer);
@@ -108,6 +167,15 @@ int main(int argc, char** argv) {
 
 bool init()
 {
+	View.resize(4, 4);
+	Model.resize(4, 4);
+	View.identity();
+	Model.identity();
+	Viewport.resize(4, 4);
+	Viewport.identity();
+	Projection.resize(4, 4);
+	Projection.identity();
+
 	//Initialization flag
 	bool success = true;
 

@@ -6,10 +6,16 @@
 #include <stdio.h>
 #include <cassert>
 
+
+template <typename T>
+class  Matrix;
+
 template <typename T>
 class Vector {
 public:
     std::vector<T> data;
+
+    Vector() {};
 
 	Vector(int size){
         data.resize(size);
@@ -36,8 +42,57 @@ public:
         return data[idx];
     }
 
+    Vector<T> homogeneous() {
+        data.resize(4);
+        data[3] = 1;
+        return *this;
+    }
+
     const T& operator[] (const int idx) const {
         return data[idx];
+    }
+
+    void print() {
+        std::cout << "(";
+        for (unsigned int i = 0; i < data.size(); i++) {
+            std::cout << data[i];
+            if (i < data.size() - 1)
+                std::cout << ", ";
+        }
+        std::cout << ")"<<std::endl;
+    }
+
+    int len() {
+        return data.size();
+    }
+
+    Matrix<T> toMatrix(bool col = true) {
+        int vLen = data.size();
+        Matrix<T> mat(vLen, 1);
+        if (col) {
+            for (int i = 0; i < vLen; i++) {
+                mat[i][0] = data[i];
+            }
+        }
+        else {
+            mat.resize(1, vLen);
+            for (int i = 0; i < vLen; i++) {
+                mat[0][i] = data[i];
+            }
+        }
+        return mat;
+    }
+
+    double norm() {
+        T sum = 0;
+        for (unsigned int i = 0; i < data.size(); i++) {
+            sum += data[i] * data[i];
+        }
+        return std::sqrt(sum); 
+    }
+    Vector<T> normalize() {
+        *this = (*this) * (1.0 / norm()); 
+        return *this;
     }
 
     Vector<T> operator+(const Vector<T>& b)
@@ -92,7 +147,7 @@ public:
         }
         return sum;
     }
-    
+
     T operator/(const Vector<T>& b)
     {
         int len = this->data.size();
@@ -104,6 +159,8 @@ public:
         }
         return sum;
     }
+
+    
 };
 
 
@@ -125,7 +182,10 @@ public:
         assert(idx < row);
         return m[idx];
     }
-
+    Matrix() {
+        row = 0;
+        col = 0;
+    };
     Matrix(int rows, int cols) :row(rows), col(cols)
     {
         m.resize(rows);
@@ -137,20 +197,31 @@ public:
         }
     }
 
-    Matrix<T> identity() {
+    void resize(int rows, int cols){
+        row = rows;
+        col = cols;
+        m.resize(rows);
+        for (int i = 0; i < rows; i++) {
+            m[i].resize(cols);
+        }
+    }
+
+    void identity() {
         for (int i = 0; i < row; i++)
             for (int j = 0; j < col; j++)
                 m[i][j] = (i == j);
-        return this;
     }
 
     void print()
     {
         for (int i = 0; i < row; i++) {
+            std::cout << "|";
             for (int j = 0; j < col; j++) {
-                std::cout << m[i][j]<<',';
+                std::cout << m[i][j];
+                if (j < col - 1)
+                    std::cout << ' ';
             }
-            std::cout << std::endl;
+            std::cout << "|" << std::endl;
         }
     }
 
@@ -211,23 +282,33 @@ public:
         int rightCol = b.col;
 
         assert(leftCol == rightRow);
+
         Matrix<T> temp(leftRow, rightCol);
         for (int i = 0; i < leftRow; i++) {
             for (int j = 0; j < rightCol; j++) {
-                int sum = 0;
+                T sum = 0.0;
                 for (int k = 0; k < leftCol; k++) {
                     sum += this->m[i][k] * b.m[k][j];
                 }
-                temp.m[i][j] = sum;
+                temp[i][j] = sum;
             }
         }
 
         return temp;
     }
-
+    
+    Vector<T> toVector() {
+        int max = col > row ? col : row;
+        Vector<T> vec(max);
+        if (col == 1) {
+            for (int i = 0; i < max; i++) {
+                vec[i] = m[i][0];
+            }
+        }
+        return vec;
+    }
 
 };
-
 
 
 #endif

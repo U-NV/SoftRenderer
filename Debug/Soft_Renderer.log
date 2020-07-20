@@ -1,10 +1,3 @@
 ﻿  main.cpp
-  myGL.cpp
-D:\VS_Project\Soft_Renderer\myGL.cpp(9,15): warning C4244: “=”: 从“double”转换到“unsigned char”，可能丢失数据
-D:\VS_Project\Soft_Renderer\myGL.cpp(10,15): warning C4244: “=”: 从“double”转换到“unsigned char”，可能丢失数据
-D:\VS_Project\Soft_Renderer\myGL.cpp(11,15): warning C4244: “=”: 从“double”转换到“unsigned char”，可能丢失数据
-D:\VS_Project\Soft_Renderer\myGL.cpp(12,15): warning C4244: “=”: 从“double”转换到“unsigned char”，可能丢失数据
-  myVector.cpp
-  tgaimage.cpp
-  正在生成代码...
+D:\VS_Project\Soft_Renderer\main.cpp(131,22): warning C4018: “<”: 有符号/无符号不匹配
   Soft_Renderer.vcxproj -> D:\VS_Project\Soft_Renderer\Debug\Soft_Renderer.exe

@@ -1,15 +1,26 @@
 #include"myGL.h"
 
+template <typename T>
+inline Vector<T> cross(Vector<T> &a, Vector<T> &b) {
+	int len = a.len();
+	assert(len == 3);
+	Vector<T> temp(len);
+	temp[0] = a[1] * b[2] - a[2] * b[1];
+	temp[1] = a[2] * b[0] - a[0] * b[2];
+	temp[2] = a[0] * b[1] - a[1] * b[0];
+	return temp;
+}
+
 inline double lerp(double a, double b, double rate) {
 	return a + (b - a) * rate;
 }
 
 inline TGAColor lerp(TGAColor a, TGAColor b, double rate) {
 	TGAColor temp;
-	temp.r = lerp(a.r, b.r, rate);
-	temp.g = lerp(a.g, b.g, rate);
-	temp.b = lerp(a.b, b.b, rate);
-	temp.a = lerp(a.a, b.a, rate);
+	temp.r = (unsigned char)lerp(a.r, b.r, rate);
+	temp.g = (unsigned char)lerp(a.g, b.g, rate);
+	temp.b = (unsigned char)lerp(a.b, b.b, rate);
+	temp.a = (unsigned char)lerp(a.a, b.a, rate);
 	return temp;
 }
 
@@ -61,44 +72,44 @@ void drawLine(Vector<int> a, Vector<int> b, TGAImage& image, TGAColor color) {
     drawLine(x0, y0, x1, y1, image, color);
 }
 
-void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	int vertexLength = vertexBuffer.size();
 	for (int i = 0; i < vertexLength; i += 3) {
 		if (i + 3 > vertexLength)break;
 
 		int w = 0, h = 0;
 		SDL_GetWindowSize(gWindow, &w, &h);
-		Vector<int> bboxmin(w - 1, h - 1);
-		Vector<int> bboxmax(0, 0);
-		Vector<int> clamp(w - 1, h - 1);
+		Vector<double> bboxmin(w - 1, h - 1);
+		Vector<double> bboxmax(0, 0);
+		Vector<double> clamp(w - 1, h - 1);
 		for (int j = 0; j < 3; j++) {
 			int vertexId = i + j;
-			bboxmin[0] = std::max(0, std::min(bboxmin[0], vertexBuffer[vertexId][0]));
+			bboxmin[0] = std::max(0.0, std::min(bboxmin[0], vertexBuffer[vertexId][0]));
 			bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], vertexBuffer[vertexId][0]));
 
-			bboxmin[1] = std::max(0, std::min(bboxmin[1], vertexBuffer[vertexId][1]));
+			bboxmin[1] = std::max(0.0, std::min(bboxmin[1], vertexBuffer[vertexId][1]));
 			bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], vertexBuffer[vertexId][1]));
 		}
 		//std::cout << "min:" << bboxmin << std::endl;
 		//std::cout << "max:" << bboxmax << std::endl;
-		Vector<int> P(0,0);
+		Vector<double> P(0,0,0,0);
 		for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
 			for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
-				Vector<int> v0 = vertexBuffer[i + 2] - vertexBuffer[i];
-				Vector<int> v1 = vertexBuffer[i + 1] - vertexBuffer[i];
-				Vector<int> v2 = P - vertexBuffer[i];
+				Vector<double> v0 = vertexBuffer[i + 2] - vertexBuffer[i];
+				Vector<double> v1 = vertexBuffer[i + 1] - vertexBuffer[i];
+				Vector<double> v2 = P - vertexBuffer[i];
 
 				//计算点积
-				int dot00 = v0 * v0;
-				int dot01 = v0 * v1;
-				int dot02 = v0 * v2;
-				int dot11 = v1 * v1;
-				int dot12 = v1 * v2;
+				double dot00 = v0 * v0;
+				double dot01 = v0 * v1;
+				double dot02 = v0 * v2;
+				double dot11 = v1 * v1;
+				double dot12 = v1 * v2;
 
 				//计算重心坐标
-				double invDenom = 1 / double(dot00 * dot11 - dot01 * dot01);
-				double u = (dot11 * dot02 - dot01 * dot12) * invDenom;
-				double v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+				double invDenom = 1 / ((double)dot00 * dot11 - dot01 * dot01);
+				double u = ((double)dot11 * dot02 - dot01 * dot12) * invDenom;
+				double v = ((double)dot00 * dot12 - dot01 * dot02) * invDenom;
 
 				if ((u >= 0) && (v >= 0) && (u + v < 1)) {
 					TGAColor leftColor = lerp(colorBuffer[i], colorBuffer[i + 1], u);
@@ -111,63 +122,118 @@ void drawTriangle2D(std::vector<Vector<int>> vertexBuffer, std::vector<TGAColor>
 	}
 }
 
+Matrix<double> translate(double x, double y, double z) {
+	Matrix<double> t(4, 4);
+	t.identity();
+	t[0][3] = x;
+	t[1][3] = y;
+	t[2][3] = z;
+	return t;
+};
 
-//void drawTriangle2D(std::vector<Vector> vertexBuffer, std::vector<TGAColor> colorBuffer, TGAImage& image) {
-//	int vertexLength = vertexBuffer.size();
-//	for (int i = 0; i < vertexLength; i += 3) {
-//		if (i + 3 > vertexLength)break;
-//		std::vector<Point2D> trianglePoint(3);
-//		for (int j = 0; j < 3; j++) {
-//			trianglePoint[j].vertex[0] = vertexBuffer[i + j].x;
-//			trianglePoint[j].vertex.y = vertexBuffer[i + j].y;
-//
-//			trianglePoint[j].color.r = colorBuffer[i + j].r;
-//			trianglePoint[j].color.g = colorBuffer[i + j].g;
-//			trianglePoint[j].color.b = colorBuffer[i + j].b;
-//			trianglePoint[j].color.a = colorBuffer[i + j].a;
-//
-//			//trianglePoint[j].vertex.print();
-//			//printf("(%d,%d) - r:%d g:%d b:%d\n", trianglePoint[j].vertex.x, trianglePoint[j].vertex.y, trianglePoint[j].color.r, trianglePoint[j].color.g, trianglePoint[j].color.b);
-//		}
-//
-//		Vector bboxmin(image.get_width() - 1, image.get_height() - 1);
-//		Vector bboxmax(0, 0);
-//		Vector clamp(image.get_width() - 1, image.get_height() - 1);
-//		for (int j = 0; j < 3; j++) {
-//			bboxmin.x = std::max(0.0, std::min(bboxmin.x, trianglePoint[j].vertex.x));
-//			bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, trianglePoint[j].vertex.x));
-//
-//			bboxmin.y = std::max(0.0, std::min(bboxmin.y, trianglePoint[j].vertex.y));
-//			bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, trianglePoint[j].vertex.y));
-//		}
-//		//std::cout << "min:" << bboxmin << std::endl;
-//		//std::cout << "max:" << bboxmax << std::endl;
-//		Vector P;
-//		for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
-//			for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
-//				Vector v0 = trianglePoint[2].vertex - trianglePoint[0].vertex;
-//				Vector v1 = trianglePoint[1].vertex - trianglePoint[0].vertex;
-//				Vector v2 = P - trianglePoint[0].vertex;
-//
-//				//计算点积
-//				int dot00 = v0 * v0;
-//				int dot01 = v0 * v1;
-//				int dot02 = v0 * v2;
-//				int dot11 = v1 * v1;
-//				int dot12 = v1 * v2;
-//
-//				//计算重心坐标
-//				double invDenom = 1 / double(dot00 * dot11 - dot01 * dot01);
-//				double u = (dot11 * dot02 - dot01 * dot12) * invDenom;
-//				double v = (dot00 * dot12 - dot01 * dot02) * invDenom;
-//
-//				if ((u >= 0) && (v >= 0) && (u + v < 1)) {
-//					TGAColor leftColor = lerp(trianglePoint[0].color, trianglePoint[1].color, u);
-//					TGAColor rightColor = lerp(trianglePoint[2].color, trianglePoint[1].color, u);
-//					TGAColor color = lerp(leftColor, rightColor, v);
-//					image.set(P.x, P.y, color);
-//				}
-//			}
-//		}
-//	}
+Matrix<double> scale(double x, double y, double z) {
+	Matrix<double> t(4, 4);
+	t.identity();
+	t[0][0] = x;
+	t[1][1] = y;
+	t[2][2] = z;
+	return t;
+};
+
+Matrix<double> rotate(Vector<double> axis,double theta) {
+	Matrix<double> t(4, 4);
+	axis.normalize();
+	axis.print();
+
+	theta = theta * PI / 180.0;
+	double cosTheta = std::cos(theta);
+	double sinTheta = std::sin(theta);
+
+	std::cout << "sinAngle:" << sinTheta << std::endl;
+	std::cout << "cosAngle:" << cosTheta << std::endl;
+	double u = axis[0];
+	double v = axis[1];
+	double w = axis[2];
+
+	t[0][0] = cosTheta + (u * u) * (1. - cosTheta);
+	t[0][1] = u * v * (1. - cosTheta) + w * sinTheta;
+	t[0][2] = u * w * (1.- cosTheta) - v * sinTheta;
+	t[0][3] = 0;
+
+	t[1][0] = u * v * (1. - cosTheta) - w * sinTheta;
+	t[1][1] = cosTheta + v * v * (1 - cosTheta);
+	t[1][2] = w * v * (1. - cosTheta) + u * sinTheta;
+	t[1][3] = 0;
+
+	t[2][0] = u * w * (1. - cosTheta) + v * sinTheta;
+	t[2][1] = v * w * (1. - cosTheta) - u * sinTheta;
+	t[2][2] = cosTheta + w * w * (1. - cosTheta);
+	t[2][3] = 0;
+
+	t[3][0] = 0;
+	t[3][1] = 0;
+	t[3][2] = 0;
+	t[3][3] = 1;
+
+	return t;
+};
+
+
+
+Matrix<double> lookat(Vector<double> eye, Vector<double> center, Vector<double> up){
+	Vector<double> z = (eye - center).normalize();
+	Vector<double> x = cross(up, z).normalize();
+	Vector<double> y = cross(z, x).normalize();
+	Matrix<double> Minv(4, 4);
+	Minv.identity();
+	Matrix<double> Tr(4, 4);
+	Tr.identity();
+
+
+	for (int i = 0; i < 3; i++) {
+		Minv[0][i] = x[i];
+		Minv[1][i] = y[i];
+		Minv[2][i] = z[i];
+		Tr[i][3] = -center[i];
+	}
+	return Minv * Tr;
+}
+
+//Matrix<double> setFrustum(float l, float r, float b, float t, float n, float f)
+//{
+//	Matrix<double> matrix;
+//	matrix[0][0] = 2 * n / (r - l);
+//	matrix[1][0] = 2 * n / (t - b);
+//	matrix[8][] = (r + l) / (r - l);
+//	matrix[9] = (t + b) / (t - b);
+//	matrix[2][2] = -(f + n) / (f - n);
+//	matrix[3][2] = -1;
+//	matrix[14] = -(2 * f * n) / (f - n);
+//	matrix[15] = 0;
+//	return matrix;
 //}
+
+Matrix<double> projection(double width, double height, double zNear, double zFar) {
+	Matrix<double> projection(4, 4);
+	double r = width / 2.0;
+	double t = height / 2.0;
+	projection[0][0] = zNear / r;
+	projection[1][1] = zNear / t;
+	projection[2][2] = -1*(zFar+zNear) /(zFar-zNear);
+	projection[2][3] = -2*zFar*zNear / (zFar-zNear);
+	projection[3][2] = -1;
+	return projection;
+}
+
+
+Matrix<double> viewport(int x, int y, int w, int h) {
+	Matrix<double> Viewport(4, 4);
+	Viewport.identity();
+	Viewport[0][3] = x + w / 2.f;
+	Viewport[1][3] = y + h / 2.f;
+	Viewport[2][3] = 1.f;
+	Viewport[0][0] = w / 2.f;
+	Viewport[1][1] = h / 2.f;
+	Viewport[2][2] = 0;
+	return Viewport;
+}
