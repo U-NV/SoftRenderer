@@ -54,16 +54,18 @@ int main(int argc, char** argv) {
 		SDL_Event e;
 
 		//首先执行缩放，接着旋转，最后才是平移
-		Model = translate(0,0,0) * rotate(Vector<double>(0, 0, 1), 0) * scale(5, 5, 1);
+		//Model = translate(0,0,0.001) * rotate(Vector<double>(0, 0, 1), 0) * scale(1000, 1000, 1000);
+		Model = translate(0,0,1)  * scale(1, 1, 1);
 		//Model.identity();
-		View = lookat(Vector<double>(0, 0, 1), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
-		Projection = projection(SCREEN_WIDTH, SCREEN_HEIGHT, 1, 5);
-		Matrix<double> MVP = Projection * View * Model;
+		View = lookat(Vector<double>(1, 0, -2), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+		Projection = projection(8, 6, 1, 10);
 		Viewport = viewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 
 		//While application is running
+		double timer = 0;
 		while (!quit){
+			timer+=0.02;
 			//Handle events on queue
 			while (SDL_PollEvent(&e) != 0)
 			{
@@ -73,83 +75,114 @@ int main(int argc, char** argv) {
 					quit = true;
 				}
 			}
-
-
-
 			//Clear screen
 			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
 			SDL_RenderClear(gRenderer);
 
 			std::vector<Vector<double>> vertexBuffer =
 			{
-				Vector<double>(-10, 0,0.1),
-				Vector<double>(0, 10,0.1),
-				Vector<double>(10, 0,0.1),
-
-				//Vector<double>(1, 0,0),
-				//Vector<double>(0, 1,0),
-				//Vector<double>(0, 0,1),
-
-				//Vector<double>(0, 0,0),
-				//Vector<double>(0, 1,0),
-				//Vector<double>(1, 0,0),
-
-				//Vector<double>(0, 0,1),
-				//Vector<double>(0, 0,0),
-				//Vector<double>(1, 0,0),
+				 Vector<double>(-0.5f, -0.5f, -0.5f),
+				 Vector<double>( 0.5f, -0.5f, -0.5f),
+				 Vector<double>(-0.5f,   0.5f, -0.5f),
+				 Vector<double>( 0.5f,   0.5f, -0.5f),
+				 Vector<double>(-0.5f, -0.5f,   0.5f),
+				 Vector<double>( 0.5f, -0.5f,   0.5f),
+				 Vector<double>(-0.5f,   0.5f,   0.5f),
+				 Vector<double>( 0.5f,   0.5f,   0.5f),
 			};
 
-			std::vector<TGAColor> colorBuffer =
-			{
-				TGAColor(255, 0, 0,255),
-				TGAColor(0, 255, 0,255),
-				TGAColor(0, 0, 255,255),
 
-				//TGAColor(0, 0, 255,255),
-				//TGAColor(0, 255, 0,255),
-				//TGAColor(255, 0, 0,255),
+			static const int index_list[][3] = {
+				 0, 2, 3,
+				 0, 3, 1,
 
-				//TGAColor(255, 0, 0,255),
-				//TGAColor(0, 255, 0,255),
-				//TGAColor(0, 0, 255,255),
-
-				//TGAColor(0, 0, 255,255),
-				//TGAColor(0, 255, 0,255),
-				//TGAColor(255, 0, 0,255),
-
+				 0, 4, 6,
+				 0, 6, 2,
+				 
+				 0, 1, 5,
+				 0, 5, 4,
+				 
+				 4, 5, 7,
+				 4, 7, 6,
+				 
+				 1, 3, 7,
+				 1, 7, 5,
+				 
+				 2, 6, 7,
+				 2, 7, 3,
 			};
-			std::cout << "Model" << std::endl;
+
+			//std::vector<TGAColor> colorBuffer =
+			//{
+			//	TGAColor(255, 0, 0,255),
+			//	TGAColor(0, 255, 0,255),
+			//	TGAColor(0, 0, 255,255),
+			//	
+			//	TGAColor(255, 0, 0,255),
+			//	TGAColor(0, 255, 0,255),
+			//	TGAColor(0, 0, 255,255),
+			//	
+			//	TGAColor(255, 0, 0,255),
+			//	TGAColor(0, 255, 0,255),
+			//	TGAColor(0, 0, 255,255),
+			//	
+			//	TGAColor(255, 0, 0,255),
+			//	TGAColor(0, 255, 0,255),
+			//	TGAColor(0, 0, 255,255),
+
+			//};
+			/*std::cout << "Model" << std::endl;
 			Model.print();
 			std::cout << "View" << std::endl;
 			View.print();
 			std::cout << "Projection" << std::endl;
 			Projection.print();
-			
 			std::cout << "Viewport" << std::endl;
-			Viewport.print();
+			Viewport.print();*/
 
-			for (int i = 0; i < vertexBuffer.size(); i++) {
-				Matrix<double> vecToMat = vertexBuffer[i].homogeneous().toMatrix();
-				std::cout << "vecToMat" << std::endl;
-				vecToMat.print();
-				Matrix<double> afterChange = MVP * vecToMat;
-				vertexBuffer[i] = afterChange.toVector();
-				std::cout << "afterChange" << std::endl;
-				vertexBuffer[i].print();
+			double radius = 100.0;
+			double camX = sin(timer) * radius;
+			double camZ = cos(timer) * radius;
+			View = lookat(Vector<double>(camX, 0.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
 
-				double w = vertexBuffer[i][3];
-				double rhw = 1.0 / w;
-				vertexBuffer[i][0] = (vertexBuffer[i][0] * rhw + 1.0f) * SCREEN_WIDTH * 0.5f;
-				vertexBuffer[i][1] = (1.0f - vertexBuffer[i][1] * rhw) * SCREEN_HEIGHT * 0.5f;
-				vertexBuffer[i][2] = vertexBuffer[i][2] * rhw;
-				vertexBuffer[i][3] = 1.0f;
+			std::vector<Vector<double>> triangleBuffer;
+			for (int i = 0; i < 2; ++i)          // 有六个面，循环六次
+			{
+				for (int j = 0; j < 3; j++) {
+					triangleBuffer.push_back(vertexBuffer[index_list[i][j]]);
+				}
 
-				std::cout << "view" << std::endl;
-				vertexBuffer[i].print();
-				
+				for (int k = 0; k < 3; k++) {
+					Matrix<double> vecToMat = triangleBuffer[k].homogeneous().toMatrix();
+					std::cout << "vecToMat" << std::endl;
+					vecToMat.print();
+					Matrix<double> MVP = Projection * View * Model;
+					Matrix<double> afterChange = MVP * vecToMat;
+
+					triangleBuffer[k] = afterChange.toVector();
+					std::cout << "afterChange" << std::endl;
+					triangleBuffer[k].print();
+
+					double w = triangleBuffer[k][3];
+					double rhw = 1.0 / w;
+					triangleBuffer[k][0] = (triangleBuffer[k][0] * rhw + 1.0f) * SCREEN_WIDTH * 0.5f;
+					triangleBuffer[k][1] = (1.0f - triangleBuffer[k][1] * rhw) * SCREEN_HEIGHT * 0.5f;
+					triangleBuffer[k][2] = triangleBuffer[k][2] * rhw;
+					triangleBuffer[k][3] = 1.0f;
+
+					std::cout << "view" << std::endl;
+					triangleBuffer[k].print();
+
+				}
+
+				//drawTriangle2D(vertexBuffer, colorBuffer, gRenderer, gWindow);
+				drawTriangle2D(triangleBuffer, white, gRenderer, gWindow);
+
+				triangleBuffer.clear();
 			}
+			
 
-			drawTriangle2D(vertexBuffer, colorBuffer, gRenderer, gWindow);
+			
 
 
 			//Update screen

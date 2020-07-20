@@ -33,7 +33,7 @@ inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, in
 	SDL_RenderDrawPoint(gRenderer, x, h - 1 - y);
 }
 
-void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
+void drawLine(int x0, int y0, int x1, int y1, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     bool steep = false;
     if (std::abs(x0 - x1) < std::abs(y0 - y1)) {
         std::swap(x0, y0);
@@ -51,10 +51,10 @@ void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
     int y = y0;
     for (int x = x0; x <= x1; x++) {
         if (steep) {
-            image.set(y, x, color);
+			SDLDrawPixel(gRenderer, gWindow, y, x, color);
         }
         else {
-            image.set(x, y, color);
+			SDLDrawPixel(gRenderer, gWindow, x, y, color);
         }
         error2 += derror2;
         if (error2 > dx) {
@@ -64,62 +64,64 @@ void drawLine(int x0, int y0, int x1, int y1, TGAImage& image, TGAColor color) {
     }
 }
 
-void drawLine(Vector<int> a, Vector<int> b, TGAImage& image, TGAColor color) {
-    int x0 = a[0];
-    int y0 = a[1];
-    int x1 = b[0];
-    int y1 = b[1];
-    drawLine(x0, y0, x1, y1, image, color);
+void drawLine(Vector<double> a, Vector<double> b,TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+    int x0 = (int)a[0];
+    int y0 = (int)a[1];
+    int x1 = (int)b[0];
+    int y1 = (int)b[1];
+    drawLine(x0, y0, x1, y1, color, gRenderer, gWindow);
+}
+
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+	drawLine(vertexBuffer[0], vertexBuffer[1], color, gRenderer, gWindow);
+	drawLine(vertexBuffer[1], vertexBuffer[2], color, gRenderer, gWindow);
+	drawLine(vertexBuffer[2], vertexBuffer[0], color, gRenderer, gWindow);
 }
 
 void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	int vertexLength = vertexBuffer.size();
-	for (int i = 0; i < vertexLength; i += 3) {
-		if (i + 3 > vertexLength)break;
+	int w = 0, h = 0;
+	SDL_GetWindowSize(gWindow, &w, &h);
+	Vector<double> bboxmin(w - 1, h - 1);
+	Vector<double> bboxmax(0, 0);
+	Vector<double> clamp(w - 1, h - 1);
 
-		int w = 0, h = 0;
-		SDL_GetWindowSize(gWindow, &w, &h);
-		Vector<double> bboxmin(w - 1, h - 1);
-		Vector<double> bboxmax(0, 0);
-		Vector<double> clamp(w - 1, h - 1);
-		for (int j = 0; j < 3; j++) {
-			int vertexId = i + j;
-			bboxmin[0] = std::max(0.0, std::min(bboxmin[0], vertexBuffer[vertexId][0]));
-			bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], vertexBuffer[vertexId][0]));
+	for (int i = 0; i < 3; i++) {
+		bboxmin[0] = std::max(0.0, std::min(bboxmin[0], vertexBuffer[i][0]));
+		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], vertexBuffer[i][0]));
 
-			bboxmin[1] = std::max(0.0, std::min(bboxmin[1], vertexBuffer[vertexId][1]));
-			bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], vertexBuffer[vertexId][1]));
-		}
-		//std::cout << "min:" << bboxmin << std::endl;
-		//std::cout << "max:" << bboxmax << std::endl;
-		Vector<double> P(0,0,0,0);
-		for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
-			for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
-				Vector<double> v0 = vertexBuffer[i + 2] - vertexBuffer[i];
-				Vector<double> v1 = vertexBuffer[i + 1] - vertexBuffer[i];
-				Vector<double> v2 = P - vertexBuffer[i];
+		bboxmin[1] = std::max(0.0, std::min(bboxmin[1], vertexBuffer[i][1]));
+		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], vertexBuffer[i][1]));
+	}
+	//std::cout << "min:" << bboxmin << std::endl;
+	//std::cout << "max:" << bboxmax << std::endl;
+	Vector<double> P(0,0,0,0);
+	for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
+		for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
+			Vector<double> v0 = vertexBuffer[2] - vertexBuffer[0];
+			Vector<double> v1 = vertexBuffer[1] - vertexBuffer[0];
+			Vector<double> v2 = P - vertexBuffer[0];
 
-				//计算点积
-				double dot00 = v0 * v0;
-				double dot01 = v0 * v1;
-				double dot02 = v0 * v2;
-				double dot11 = v1 * v1;
-				double dot12 = v1 * v2;
+			//计算点积
+			double dot00 = v0 * v0;
+			double dot01 = v0 * v1;
+			double dot02 = v0 * v2;
+			double dot11 = v1 * v1;
+			double dot12 = v1 * v2;
 
-				//计算重心坐标
-				double invDenom = 1 / ((double)dot00 * dot11 - dot01 * dot01);
-				double u = ((double)dot11 * dot02 - dot01 * dot12) * invDenom;
-				double v = ((double)dot00 * dot12 - dot01 * dot02) * invDenom;
+			//计算重心坐标
+			double invDenom = 1 / ((double)dot00 * dot11 - dot01 * dot01);
+			double u = ((double)dot11 * dot02 - dot01 * dot12) * invDenom;
+			double v = ((double)dot00 * dot12 - dot01 * dot02) * invDenom;
 
-				if ((u >= 0) && (v >= 0) && (u + v < 1)) {
-					TGAColor leftColor = lerp(colorBuffer[i], colorBuffer[i + 1], u);
-					TGAColor rightColor = lerp(colorBuffer[i + 2], colorBuffer[i + 1], u);
-					TGAColor color = lerp(leftColor, rightColor, v);
-					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
-				}
+			if ((u >= 0) && (v >= 0) && (u + v < 1)) {
+				TGAColor leftColor = lerp(colorBuffer[0], colorBuffer[1], u);
+				TGAColor rightColor = lerp(colorBuffer[2], colorBuffer[1], u);
+				TGAColor color = lerp(leftColor, rightColor, v);
+				SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
 			}
 		}
 	}
+	
 }
 
 Matrix<double> translate(double x, double y, double z) {
