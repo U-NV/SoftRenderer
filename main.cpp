@@ -41,6 +41,14 @@ Matrix<double> View;
 Matrix<double> Projection;
 Matrix<double> Viewport;
 
+
+static Vector<double> viewport_transform(int width, int height, Vector<double> ndc_coord) {
+	float x = (ndc_coord[0] + 1) * 0.5f * (float)width;   /* [-1, 1] -> [0, w] */
+	float y = (ndc_coord[1] + 1) * 0.5f * (float)height;  /* [-1, 1] -> [0, h] */
+	float z = (ndc_coord[2] + 1) * 0.5f;                  /* [-1, 1] -> [0, 1] */
+	return Vector<double>(x, y, z);
+}
+
 int main(int argc, char** argv) {
 	if (!init())
 	{
@@ -55,11 +63,11 @@ int main(int argc, char** argv) {
 
 		//首先执行缩放，接着旋转，最后才是平移
 		//Model = translate(0,0,0.001) * rotate(Vector<double>(0, 0, 1), 0) * scale(1000, 1000, 1000);
-		Model = translate(0,0,1)  * scale(1, 1, 1);
-		//Model.identity();
+		//Model = translate(0,0,1)  * scale(1, 1, 1);
+		Model.identity();
 		View = lookat(Vector<double>(1, 0, -2), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
-		Projection = projection(8, 6, 1, 10);
-		Viewport = viewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+		Projection = setFrustum(60, SCREEN_WIDTH/ SCREEN_HEIGHT, 1, 10);
+		//Viewport = viewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 
 		//While application is running
@@ -140,13 +148,13 @@ int main(int argc, char** argv) {
 			std::cout << "Viewport" << std::endl;
 			Viewport.print();*/
 
-			double radius = 100.0;
+			double radius = 1;
 			double camX = sin(timer) * radius;
 			double camZ = cos(timer) * radius;
-			View = lookat(Vector<double>(camX, 0.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+			View = lookat(Vector<double>(camX, 1.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
 
 			std::vector<Vector<double>> triangleBuffer;
-			for (int i = 0; i < 2; ++i)          // 有六个面，循环六次
+			for (int i = 0; i < 12; ++i)          // 有六个面，循环六次
 			{
 				for (int j = 0; j < 3; j++) {
 					triangleBuffer.push_back(vertexBuffer[index_list[i][j]]);
@@ -163,12 +171,14 @@ int main(int argc, char** argv) {
 					std::cout << "afterChange" << std::endl;
 					triangleBuffer[k].print();
 
-					double w = triangleBuffer[k][3];
-					double rhw = 1.0 / w;
-					triangleBuffer[k][0] = (triangleBuffer[k][0] * rhw + 1.0f) * SCREEN_WIDTH * 0.5f;
-					triangleBuffer[k][1] = (1.0f - triangleBuffer[k][1] * rhw) * SCREEN_HEIGHT * 0.5f;
-					triangleBuffer[k][2] = triangleBuffer[k][2] * rhw;
-					triangleBuffer[k][3] = 1.0f;
+					//double w = triangleBuffer[k][3];
+					//double rhw = 1.0 / w;
+					//triangleBuffer[k][0] = (triangleBuffer[k][0] * rhw + 1.0f) * SCREEN_WIDTH * 0.5f;
+					//triangleBuffer[k][1] = (1.0f - triangleBuffer[k][1] * rhw) * SCREEN_HEIGHT * 0.5f;
+					//triangleBuffer[k][2] = triangleBuffer[k][2] * rhw;
+					//triangleBuffer[k][3] = 1.0f;
+
+					triangleBuffer[k] = viewport_transform(SCREEN_WIDTH,SCREEN_HEIGHT, triangleBuffer[k]);
 
 					std::cout << "view" << std::endl;
 					triangleBuffer[k].print();

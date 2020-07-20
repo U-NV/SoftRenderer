@@ -34,8 +34,10 @@ Matrix<double> lookat(Vector<double> eye, Vector<double> center, Vector<double> 
 Matrix<double> lookat(Vector<double> eye, Vector<double> center, Vector<double> up);
 
 //Õ∏ ”
-//Matrix<double> setFrustum(float l, float r, float b, float t, float n, float f);
 Matrix<double> projection(double width, double height, double zNear, double zFar);
+Matrix<double> setFrustum(double l, double r, double b, double t, double n, double f);
+Matrix<double> setFrustum(double fovY, double aspectRatio, double front, double back);
+
 
 // ”¥∞
 Matrix<double> viewport(int x, int y, int w, int h);

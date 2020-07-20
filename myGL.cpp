@@ -188,32 +188,79 @@ Matrix<double> lookat(Vector<double> eye, Vector<double> center, Vector<double> 
 	Vector<double> y = cross(z, x).normalize();
 	Matrix<double> Minv(4, 4);
 	Minv.identity();
-	Matrix<double> Tr(4, 4);
-	Tr.identity();
-
+	//Matrix<double> Tr(4, 4);
+	//Tr.identity();
+	/*for (int i = 0; i < 3; i++) {
+		Minv[0][i] = x[i];
+		Minv[1][i] = y[i];
+		Minv[2][i] = z[i];
+		Tr[i][3] = -1*();
+	}
+	return Minv * Tr;*/
 
 	for (int i = 0; i < 3; i++) {
 		Minv[0][i] = x[i];
 		Minv[1][i] = y[i];
 		Minv[2][i] = z[i];
-		Tr[i][3] = -center[i];
 	}
-	return Minv * Tr;
+	Minv[0][3] = -1*(x * eye);
+	Minv[1][3] = -1*(y * eye);
+	Minv[2][3] = -1*(z * eye);
+
+	return Minv;
 }
 
-//Matrix<double> setFrustum(float l, float r, float b, float t, float n, float f)
-//{
-//	Matrix<double> matrix;
-//	matrix[0][0] = 2 * n / (r - l);
-//	matrix[1][0] = 2 * n / (t - b);
-//	matrix[8][] = (r + l) / (r - l);
-//	matrix[9] = (t + b) / (t - b);
-//	matrix[2][2] = -(f + n) / (f - n);
-//	matrix[3][2] = -1;
-//	matrix[14] = -(2 * f * n) / (f - n);
-//	matrix[15] = 0;
-//	return matrix;
-//}
+Matrix<double> setFrustum(double left, double right, double bottom, double top, double near, double far) {
+	double x_range = right - left;
+	double y_range = top - bottom;
+	double z_range = far - near;
+
+	Matrix<double> matrix(4, 4);
+	matrix.identity();
+	matrix[0][0] = 2.0 * near / x_range;
+	matrix[0][0] = 2.0 * near / y_range;
+	matrix[0][0] = (left + right) / x_range;
+	matrix[0][0] = (bottom + top) / y_range;
+	matrix[0][0] = -(near + far) / z_range;
+	matrix[0][0] = -2.0 * near * far / z_range;
+	matrix[0][0] = -1.0;
+	matrix[0][0] = 0.0;
+
+	//matrix[0][0] = 2 * n / (r - l);
+	//matrix[1][1] = 2 * n / (t - b);
+	//matrix[2][0] = (r + l) / (r - l);
+	//matrix[2][1] = (t + b) / (t - b);
+	//matrix[2][2] = -(f + n) / (f - n);
+	//matrix[2][3] = -1;
+	//matrix[3][2] = -(2 * f * n) / (f - n);
+	//matrix[3][3] = 0;
+	return matrix;
+}
+
+Matrix<double> setFrustum(double fovy, double aspect, double near, double far)
+{
+	//float tangent = tanf(fovY / 2 * (PI / 180));   // tangent of half fovY
+	//float height = front * tangent;           // half height of near plane
+	//float width = height * aspectRatio;       // half width of near plane
+
+	//// params: left, right, bottom, top, near, far
+	//return setFrustum(-width, width, -height, height, front, back);
+
+	float z_range = far - near;
+	Matrix<double> matrix(4, 4);
+	matrix.identity();
+	assert(fovy > 0 && aspect > 0);
+	assert(near > 0 && far > 0 && z_range > 0);
+	matrix[1][1] = 1 / (float)tan(fovy / 2);
+	matrix[0][0] = matrix[1][1] / aspect;
+	matrix[2][2] = -(near + far) / z_range;
+	matrix[2][3] = -2 * near * far / z_range;
+	matrix[3][2] = -1;
+	matrix[3][3] = 0;
+	return matrix;
+
+}
+
 
 Matrix<double> projection(double width, double height, double zNear, double zFar) {
 	Matrix<double> projection(4, 4);
