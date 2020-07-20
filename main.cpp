@@ -9,8 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "SDL.h"
-#include "SDL_revision.h"
+
 
 
 const TGAColor white = TGAColor(255, 255, 255, 255);
@@ -21,8 +20,8 @@ void printTGAColor(TGAColor color) {
 }
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
+const int SCREEN_WIDTH = 100;
+const int SCREEN_HEIGHT = 100;
 
 //Starts up SDL and creates window
 bool init();
@@ -36,11 +35,6 @@ SDL_Window* gWindow = NULL;
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
 
-
-void SDLDrawPixel(int x, int y)
-{
-	SDL_RenderDrawPoint(gRenderer, x, SCREEN_HEIGHT - 1 - y);
-}
 
 int main(int argc, char** argv) {
 
@@ -94,16 +88,11 @@ int main(int argc, char** argv) {
 
 			};
 
-			drawTriangle2D(vertexBuffer, colorBuffer, frame);
+			drawTriangle2D(vertexBuffer, colorBuffer, gRenderer, gWindow);
 
 
 
 			//Draw vertical line of yellow dots
-			SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0x00, 0xFF);
-			for (int i = 0; i < SCREEN_HEIGHT; i++)
-			{
-				SDLDrawPixel(SCREEN_WIDTH / 2, i);
-			}
 
 			//Update screen
 			SDL_RenderPresent(gRenderer);
