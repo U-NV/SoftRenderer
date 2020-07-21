@@ -10,16 +10,17 @@
 #include "SDL_revision.h"
 
 #define PI acos(-1)
+#define EPSILON 1e-5
 
-inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y, const TGAColor& color);
+inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y, Vector<int>& color);
 
-void drawLine(int x0, int y0, int x1, int y1, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-void drawLine(Vector<int> a, Vector<int> b, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+void drawLine(int x0, int y0, int x1, int y1, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+void drawLine(Vector<int> a, Vector<int> b, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 //void drawTriangle2D(std::vector<Vector> vertexBuffer, std::vector<TGAColor> colorBuffer, TGAImage& image);
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-
-inline double lerp(double a, double b, double rate);
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<Vector<int>> colorBuffer,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+template <typename T>
+inline T lerp(T a, T b, double rate);
 inline TGAColor lerp(TGAColor a, TGAColor b, double rate);
 template <typename T>
 inline Vector<T> cross(const Vector<T>& a, const Vector<T>& b);

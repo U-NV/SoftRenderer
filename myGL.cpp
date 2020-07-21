@@ -11,7 +11,9 @@ inline Vector<T> cross(Vector<T> &a, Vector<T> &b) {
 	return temp;
 }
 
-inline double lerp(double a, double b, double rate) {
+
+template <typename T>
+inline T lerp(T a, T b, double rate) {
 	return a + (b - a) * rate;
 }
 
@@ -25,15 +27,16 @@ inline TGAColor lerp(TGAColor a, TGAColor b, double rate) {
 }
 
 //将坐标系原点改为左下角
-inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,const TGAColor &color)
+inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,Vector<int>& color)
 {
 	int w = 0, h = 0;
-	SDL_SetRenderDrawColor(gRenderer, color.r, color.g, color.b, color.a);
+	SDL_SetRenderDrawColor(gRenderer, color[0], color[1], color[2], color[3]);
 	SDL_GetWindowSize(gWindow, &w, &h);
 	SDL_RenderDrawPoint(gRenderer, x, h - 1 - y);
+	//SDL_RenderDrawPoint(gRenderer, x,y);
 }
 
-void drawLine(int x0, int y0, int x1, int y1, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawLine(int x0, int y0, int x1, int y1, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     bool steep = false;
     if (std::abs(x0 - x1) < std::abs(y0 - y1)) {
         std::swap(x0, y0);
@@ -64,7 +67,7 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor color, SDL_Renderer* gRen
     }
 }
 
-void drawLine(Vector<double> a, Vector<double> b,TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawLine(Vector<double> a, Vector<double> b, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     int x0 = (int)a[0];
     int y0 = (int)a[1];
     int x1 = (int)b[0];
@@ -72,53 +75,90 @@ void drawLine(Vector<double> a, Vector<double> b,TGAColor color, SDL_Renderer* g
     drawLine(x0, y0, x1, y1, color, gRenderer, gWindow);
 }
 
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, TGAColor color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	drawLine(vertexBuffer[0], vertexBuffer[1], color, gRenderer, gWindow);
 	drawLine(vertexBuffer[1], vertexBuffer[2], color, gRenderer, gWindow);
 	drawLine(vertexBuffer[2], vertexBuffer[0], color, gRenderer, gWindow);
 }
 
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<TGAColor> colorBuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+
+static Vector<double> calculate_weights(std::vector<Vector<int>> screen_coords, Vector<int> P) {
+	Vector<double> a(screen_coords[0][0], screen_coords[0][1]);
+	Vector<double> b(screen_coords[1][0], screen_coords[1][1]);
+	Vector<double> c(screen_coords[2][0], screen_coords[2][1]);
+	Vector<double> p(P[0], P[1]);
+	Vector<double> ab = b - a;
+	Vector<double> ac = c - a;
+	Vector<double> ap = p - a;
+	float factor = 1 / (ab[0] * ac[1] - ab[1] * ac[0]);
+	float s = (ac[1] * ap[0] - ac[0] * ap[1]) * factor;
+	float t = (ab[0] * ap[1] - ab[1] * ap[0]) * factor;
+	return Vector<double>(1 - s - t, s, t);
+}
+
+static double interpolate_depth(double screen_depths[3], Vector<double> weights) {
+	double depth0 = screen_depths[0] * weights[0];
+	double depth1 = screen_depths[1] * weights[1];
+	double depth2 = screen_depths[2] * weights[2];
+	return depth0 + depth1 + depth2;
+}
+
+static Vector<int> interpolate_color(std::vector <Vector<int>> colors, Vector<double> weights) {
+
+	Vector<double> color0 = Vector<double>(colors[0][0] * weights[0], colors[0][1] * weights[0], colors[0][2] * weights[0]);
+	Vector<double> color1 = Vector<double>(colors[1][0] * weights[1], colors[1][1] * weights[1], colors[1][2] * weights[1]);
+	Vector<double> color2 = Vector<double>(colors[2][0] * weights[2], colors[2][1] * weights[2], colors[2][2] * weights[2]);
+	Vector<double> color = color0 + color1 + color2;
+	return Vector<int>(color[0], color[1], color[2],255);
+}
+
+void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<Vector<int>> colorBuffer, double* zbuffer,SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	int w = 0, h = 0;
 	SDL_GetWindowSize(gWindow, &w, &h);
-	Vector<double> bboxmin(w - 1, h - 1);
-	Vector<double> bboxmax(0, 0);
-	Vector<double> clamp(w - 1, h - 1);
+	
 
+	std::vector<Vector<int>> screen_coords(3);
+	double screen_depths[3];
 	for (int i = 0; i < 3; i++) {
-		bboxmin[0] = std::max(0.0, std::min(bboxmin[0], vertexBuffer[i][0]));
-		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], vertexBuffer[i][0]));
-
-		bboxmin[1] = std::max(0.0, std::min(bboxmin[1], vertexBuffer[i][1]));
-		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], vertexBuffer[i][1]));
+		screen_coords[i] = Vector<int>(vertexBuffer[i][0], vertexBuffer[i][1]);
+		screen_depths[i] = vertexBuffer[i][2];
 	}
-	//std::cout << "min:" << bboxmin << std::endl;
-	//std::cout << "max:" << bboxmax << std::endl;
-	Vector<double> P(0,0,0,0);
+
+	Vector<int> bboxmin(w - 1, h - 1);
+	Vector<int> bboxmax(0, 0);
+	Vector<int> clamp(w - 1, h - 1);
+	for (int i = 0; i < 3; i++) {
+		bboxmin[0] = std::max(0, std::min(bboxmin[0], screen_coords[i][0]));
+		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], screen_coords[i][0]));
+
+		bboxmin[1] = std::max(0, std::min(bboxmin[1], screen_coords[i][1]));
+		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], screen_coords[i][1]));
+	}
+	//std::cout << "bboxmin[0]" << std::endl;
+	//bboxmin.print();
+	//bboxmax.print();
+	Vector<int> P(0,0);
 	for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
 		for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
-			Vector<double> v0 = vertexBuffer[2] - vertexBuffer[0];
-			Vector<double> v1 = vertexBuffer[1] - vertexBuffer[0];
-			Vector<double> v2 = P - vertexBuffer[0];
+			Vector<double> weights = calculate_weights(screen_coords, P);
+			int weight0_okay = weights[0] > -EPSILON;
+			int weight1_okay = weights[1] > -EPSILON;
+			int weight2_okay = weights[2] > -EPSILON;
+			if (weight0_okay && weight1_okay && weight2_okay) {
+				int zbufferInd = (int)P[0] + (int)P[1] * w;
+				double frag_depth = interpolate_depth(screen_depths, weights);
+				if (frag_depth <= zbuffer[zbufferInd]) {
+					zbuffer[zbufferInd] = frag_depth;
+					Vector<int> color = interpolate_color(colorBuffer,weights);
 
-			//计算点积
-			double dot00 = v0 * v0;
-			double dot01 = v0 * v1;
-			double dot02 = v0 * v2;
-			double dot11 = v1 * v1;
-			double dot12 = v1 * v2;
-
-			//计算重心坐标
-			double invDenom = 1 / ((double)dot00 * dot11 - dot01 * dot01);
-			double u = ((double)dot11 * dot02 - dot01 * dot12) * invDenom;
-			double v = ((double)dot00 * dot12 - dot01 * dot02) * invDenom;
-
-			if ((u >= 0) && (v >= 0) && (u + v < 1)) {
-				TGAColor leftColor = lerp(colorBuffer[0], colorBuffer[1], u);
-				TGAColor rightColor = lerp(colorBuffer[2], colorBuffer[1], u);
-				TGAColor color = lerp(leftColor, rightColor, v);
-				SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
-			}
+					/*int depthColor = frag_depth * 255;
+					Vector<int> color = Vector<int>(depthColor, depthColor, depthColor, 255);*/
+					//std::cout << depthColor << std::endl;
+					
+					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
+				}
+			};
+			
 		}
 	}
 	

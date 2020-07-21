@@ -36,7 +36,7 @@ public:
         data[0] = X;
         data[1] = Y;
         data[2] = Z;
-        data[1] = W;
+        data[3] = W;
     };
     T& operator[] (const int idx) {
         return data[idx];
