@@ -1,5 +1,7 @@
 #include"myGL.h"
 
+IShader::~IShader() {}
+
 template <typename T>
 inline Vector<T> cross(Vector<T> &a, Vector<T> &b) {
 	int len = a.len();
@@ -15,15 +17,6 @@ inline Vector<T> cross(Vector<T> &a, Vector<T> &b) {
 template <typename T>
 inline T lerp(T a, T b, double rate) {
 	return a + (b - a) * rate;
-}
-
-inline TGAColor lerp(TGAColor a, TGAColor b, double rate) {
-	TGAColor temp;
-	temp.r = (unsigned char)lerp(a.r, b.r, rate);
-	temp.g = (unsigned char)lerp(a.g, b.g, rate);
-	temp.b = (unsigned char)lerp(a.b, b.b, rate);
-	temp.a = (unsigned char)lerp(a.a, b.a, rate);
-	return temp;
 }
 
 //将坐标系原点改为左下角
@@ -67,7 +60,7 @@ void drawLine(int x0, int y0, int x1, int y1, Vector<int> color, SDL_Renderer* g
     }
 }
 
-void drawLine(Vector<double> a, Vector<double> b, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawLine(Vector<int> a, Vector<int> b, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     int x0 = (int)a[0];
     int y0 = (int)a[1];
     int x1 = (int)b[0];
@@ -75,14 +68,8 @@ void drawLine(Vector<double> a, Vector<double> b, Vector<int> color, SDL_Rendere
     drawLine(x0, y0, x1, y1, color, gRenderer, gWindow);
 }
 
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, Vector<int> color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	drawLine(vertexBuffer[0], vertexBuffer[1], color, gRenderer, gWindow);
-	drawLine(vertexBuffer[1], vertexBuffer[2], color, gRenderer, gWindow);
-	drawLine(vertexBuffer[2], vertexBuffer[0], color, gRenderer, gWindow);
-}
 
-
-static Vector<double> calculate_weights(std::vector<Vector<int>> screen_coords, Vector<int> P) {
+static Vector<double> calculate_weights(std::vector<Vector<int>> &screen_coords, Vector<int> &P) {
 	Vector<double> a(screen_coords[0][0], screen_coords[0][1]);
 	Vector<double> b(screen_coords[1][0], screen_coords[1][1]);
 	Vector<double> c(screen_coords[2][0], screen_coords[2][1]);
@@ -90,20 +77,20 @@ static Vector<double> calculate_weights(std::vector<Vector<int>> screen_coords, 
 	Vector<double> ab = b - a;
 	Vector<double> ac = c - a;
 	Vector<double> ap = p - a;
-	float factor = 1 / (ab[0] * ac[1] - ab[1] * ac[0]);
-	float s = (ac[1] * ap[0] - ac[0] * ap[1]) * factor;
-	float t = (ab[0] * ap[1] - ab[1] * ap[0]) * factor;
+	double factor = 1 / (ab[0] * ac[1] - ab[1] * ac[0]);
+	double s = (ac[1] * ap[0] - ac[0] * ap[1]) * factor;
+	double t = (ab[0] * ap[1] - ab[1] * ap[0]) * factor;
 	return Vector<double>(1 - s - t, s, t);
 }
 
-static double interpolate_depth(double screen_depths[3], Vector<double> weights) {
+static double interpolate_depth(double *screen_depths, Vector<double> &weights) {
 	double depth0 = screen_depths[0] * weights[0];
 	double depth1 = screen_depths[1] * weights[1];
 	double depth2 = screen_depths[2] * weights[2];
 	return depth0 + depth1 + depth2;
 }
 
-static Vector<int> interpolate_color(std::vector <Vector<int>> colors, Vector<double> weights) {
+static Vector<int> interpolate_color(std::vector <Vector<int>> &colors, Vector<double> &weights) {
 
 	Vector<double> color0 = Vector<double>(colors[0][0] * weights[0], colors[0][1] * weights[0], colors[0][2] * weights[0]);
 	Vector<double> color1 = Vector<double>(colors[1][0] * weights[1], colors[1][1] * weights[1], colors[1][2] * weights[1]);
@@ -112,17 +99,84 @@ static Vector<int> interpolate_color(std::vector <Vector<int>> colors, Vector<do
 	return Vector<int>(color[0], color[1], color[2],255);
 }
 
-void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<Vector<int>> colorBuffer, double* zbuffer,SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+Vector<double> interpolate_uv(std::vector <Vector<double>> &uvs, Vector<double> &weights) {
+	Vector<double> uv0 = uvs[0] * weights[0];
+	Vector<double> uv1 = uvs[1] * weights[1];
+	Vector<double> uv2 = uvs[2] * weights[2];
+	return uv0 + uv1 + uv2;
+}
+
+static bool is_back_facing(std::vector<Vector<double>> &ndc_coords) {
+	Vector<double> a = ndc_coords[0];
+	Vector<double> b = ndc_coords[1];
+	Vector<double> c = ndc_coords[2];
+	float signed_area = a[0] * b[1] - a[1] * b[0] +
+		b[0] * c[1] - b[1] * c[0] +
+		c[0] * a[1] - c[1] * a[0];
+	return signed_area <= 0;
+}
+
+void draw2DFrame(std::vector<Vector<double>>& vertexBuffer, Vector<int>& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	int w = 0, h = 0;
 	SDL_GetWindowSize(gWindow, &w, &h);
-	
 
 	std::vector<Vector<int>> screen_coords(3);
 	double screen_depths[3];
+
+	/* perspective division */
 	for (int i = 0; i < 3; i++) {
-		screen_coords[i] = Vector<int>(vertexBuffer[i][0], vertexBuffer[i][1]);
+		vertexBuffer[i] = vertexBuffer[i] / vertexBuffer[i][3];
+	}
+
+	/* back-face culling */
+	if (is_back_facing(vertexBuffer)) {
+		//std::cout << "back_facing" << std::endl;
+		return;
+	}
+
+	/* viewport mapping */
+	for (int i = 0; i < 3; i++) {
+		vertexBuffer[i] = viewport_transform(w, h, vertexBuffer[i]);
+		screen_coords[i] = Vector<int>((int)vertexBuffer[i][0], (int)vertexBuffer[i][1]);
 		screen_depths[i] = vertexBuffer[i][2];
 	}
+
+	drawLine(screen_coords[0], screen_coords[1], color, gRenderer, gWindow);
+	drawLine(screen_coords[1], screen_coords[2], color, gRenderer, gWindow);
+	drawLine(screen_coords[2], screen_coords[0], color, gRenderer, gWindow);
+}
+
+void drawTriangle2D(std::vector<Vector<double>> &vertexBuffer, IShader& shader,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+	
+	int w = 0, h = 0;
+	SDL_GetWindowSize(gWindow, &w, &h);
+	std::vector<Vector<int>> screen_coords(3);
+	double screen_depths[3];
+
+	/* perspective division */
+	for (int i = 0; i < 3; i++) {
+		vertexBuffer[i] = vertexBuffer[i] / vertexBuffer[i][3];
+	}
+	
+	/* back-face culling */
+	if (is_back_facing(vertexBuffer)) {
+		//std::cout << "back_facing" << std::endl;
+		return;
+	}
+
+	float recip_w[3];
+	/* reciprocals of w */
+	for (int i = 0; i < 3; i++) {
+		recip_w[i] = 1 / vertexBuffer[i][3];
+	}
+
+	/* viewport mapping */
+	for (int i = 0; i < 3; i++) {
+		vertexBuffer[i] = viewport_transform(w, h, vertexBuffer[i]);
+		screen_coords[i] = Vector<int>((int)vertexBuffer[i][0], (int)vertexBuffer[i][1]);
+		screen_depths[i] = vertexBuffer[i][2];
+	}
+
 
 	Vector<int> bboxmin(w - 1, h - 1);
 	Vector<int> bboxmax(0, 0);
@@ -130,14 +184,12 @@ void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<Vector
 	for (int i = 0; i < 3; i++) {
 		bboxmin[0] = std::max(0, std::min(bboxmin[0], screen_coords[i][0]));
 		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], screen_coords[i][0]));
-
 		bboxmin[1] = std::max(0, std::min(bboxmin[1], screen_coords[i][1]));
 		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], screen_coords[i][1]));
 	}
-	//std::cout << "bboxmin[0]" << std::endl;
-	//bboxmin.print();
-	//bboxmax.print();
-	Vector<int> P(0,0);
+
+	Vector<int> P(0, 0);
+	TGAColor color;
 	for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
 		for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
 			Vector<double> weights = calculate_weights(screen_coords, P);
@@ -149,20 +201,17 @@ void drawTriangle2D(std::vector<Vector<double>> vertexBuffer, std::vector<Vector
 				double frag_depth = interpolate_depth(screen_depths, weights);
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					zbuffer[zbufferInd] = frag_depth;
-					Vector<int> color = interpolate_color(colorBuffer,weights);
-
-					/*int depthColor = frag_depth * 255;
-					Vector<int> color = Vector<int>(depthColor, depthColor, depthColor, 255);*/
-					//std::cout << depthColor << std::endl;
-					
-					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
+					bool discard = shader.fragment(weights, color);
+					Vector<int> colorVector = Vector<int>(color[2], color[1], color[0], color[3]);
+					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], colorVector);
 				}
 			};
-			
+
 		}
 	}
-	
+
 }
+
 
 Matrix<double> translate(double x, double y, double z) {
 	Matrix<double> t(4, 4);
@@ -228,16 +277,6 @@ Matrix<double> lookat(Vector<double> eye, Vector<double> center, Vector<double> 
 	Vector<double> y = cross(z, x).normalize();
 	Matrix<double> Minv(4, 4);
 	Minv.identity();
-	//Matrix<double> Tr(4, 4);
-	//Tr.identity();
-	/*for (int i = 0; i < 3; i++) {
-		Minv[0][i] = x[i];
-		Minv[1][i] = y[i];
-		Minv[2][i] = z[i];
-		Tr[i][3] = -1*();
-	}
-	return Minv * Tr;*/
-
 	for (int i = 0; i < 3; i++) {
 		Minv[0][i] = x[i];
 		Minv[1][i] = y[i];
@@ -265,28 +304,12 @@ Matrix<double> setFrustum(double left, double right, double bottom, double top, 
 	matrix[0][0] = -2.0 * near * far / z_range;
 	matrix[0][0] = -1.0;
 	matrix[0][0] = 0.0;
-
-	//matrix[0][0] = 2 * n / (r - l);
-	//matrix[1][1] = 2 * n / (t - b);
-	//matrix[2][0] = (r + l) / (r - l);
-	//matrix[2][1] = (t + b) / (t - b);
-	//matrix[2][2] = -(f + n) / (f - n);
-	//matrix[2][3] = -1;
-	//matrix[3][2] = -(2 * f * n) / (f - n);
-	//matrix[3][3] = 0;
 	return matrix;
 }
 
 Matrix<double> setFrustum(double fovy, double aspect, double near, double far)
 {
-	//float tangent = tanf(fovY / 2 * (PI / 180));   // tangent of half fovY
-	//float height = front * tangent;           // half height of near plane
-	//float width = height * aspectRatio;       // half width of near plane
-
-	//// params: left, right, bottom, top, near, far
-	//return setFrustum(-width, width, -height, height, front, back);
-
-	float z_range = far - near;
+	double z_range = far - near;
 	Matrix<double> matrix(4, 4);
 	matrix.identity();
 	assert(fovy > 0 && aspect > 0);
@@ -315,14 +338,63 @@ Matrix<double> projection(double width, double height, double zNear, double zFar
 }
 
 
-Matrix<double> viewport(int x, int y, int w, int h) {
-	Matrix<double> Viewport(4, 4);
-	Viewport.identity();
-	Viewport[0][3] = x + w / 2.f;
-	Viewport[1][3] = y + h / 2.f;
-	Viewport[2][3] = 1.f;
-	Viewport[0][0] = w / 2.f;
-	Viewport[1][1] = h / 2.f;
-	Viewport[2][2] = 0;
-	return Viewport;
+static Vector<double> viewport_transform(int width, int height, Vector<double> ndc_coord) {
+	double x = (ndc_coord[0] + 1) * 0.5f * (double)width;   /* [-1, 1] -> [0, w] */
+	double y = (ndc_coord[1] + 1) * 0.5f * (double)height;  /* [-1, 1] -> [0, h] */
+	double z = (ndc_coord[2] + 1) * 0.5f;                  /* [-1, 1] -> [0, 1] */
+	return Vector<double>(x, y, z);
 }
+
+
+
+
+
+//void drawTriangle2D(std::vector<Vector<double>>& vertexBuffer, std::vector<Vector<int>>& colorBuffer, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+//	int w = 0, h = 0;
+//	SDL_GetWindowSize(gWindow, &w, &h);
+//
+//	std::vector<Vector<int>> screen_coords(3);
+//	double screen_depths[3];
+//	for (int i = 0; i < 3; i++) {
+//		screen_coords[i] = Vector<int>((int)vertexBuffer[i][0], (int)vertexBuffer[i][1]);
+//		screen_depths[i] = vertexBuffer[i][2];
+//	}
+//
+//	Vector<int> bboxmin(w - 1, h - 1);
+//	Vector<int> bboxmax(0, 0);
+//	Vector<int> clamp(w - 1, h - 1);
+//	for (int i = 0; i < 3; i++) {
+//		bboxmin[0] = std::max(0, std::min(bboxmin[0], screen_coords[i][0]));
+//		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], screen_coords[i][0]));
+//
+//		bboxmin[1] = std::max(0, std::min(bboxmin[1], screen_coords[i][1]));
+//		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], screen_coords[i][1]));
+//	}
+//	//std::cout << "bboxmin[0]" << std::endl;
+//	//bboxmin.print();
+//	//bboxmax.print();
+//	Vector<int> P(0, 0);
+//	for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
+//		for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
+//			Vector<double> weights = calculate_weights(screen_coords, P);
+//			int weight0_okay = weights[0] > -EPSILON;
+//			int weight1_okay = weights[1] > -EPSILON;
+//			int weight2_okay = weights[2] > -EPSILON;
+//			if (weight0_okay && weight1_okay && weight2_okay) {
+//				int zbufferInd = (int)P[0] + (int)P[1] * w;
+//				double frag_depth = interpolate_depth(screen_depths, weights);
+//				if (frag_depth <= zbuffer[zbufferInd]) {
+//					zbuffer[zbufferInd] = frag_depth;
+//
+//					int depthColor = frag_depth * 255;
+//					Vector<int> color = Vector<int>(depthColor, depthColor, depthColor, 255);
+//					//std::cout << depthColor << std::endl;
+//
+//					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
+//				}
+//			};
+//
+//		}
+//	}
+//
+//}

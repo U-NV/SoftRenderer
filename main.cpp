@@ -1,6 +1,8 @@
 #include "tgaimage.h"
 #include "myVector.h"
 #include "myGL.h"
+#include "model.h"
+
 #include <vector>
 #include <limits>
 #include <cmath>
@@ -9,19 +11,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <time.h>
 
-
-
-const TGAColor white = TGAColor(255, 255, 255, 255);
-const TGAColor red   = TGAColor(255, 0,   0,   255);
-
-void printTGAColor(TGAColor color) {
-	printf("r:%d g:%d b:%d\n", color.r, color.g, color.b);
-}
+Vector<int> white(255, 255, 255, 255);
+TGAColor red   = TGAColor(255, 0,   0,   255);
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 200;
-const int SCREEN_HEIGHT = 100;
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
 
 //Starts up SDL and creates window
 bool init();
@@ -35,19 +32,71 @@ SDL_Window* gWindow = NULL;
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
 
+Matrix<double> ModelMatrix;
+Matrix<double> ViewMatrix;
+Matrix<double> ProjectionMatrix;
 
-Matrix<double> Model;
-Matrix<double> View;
-Matrix<double> Projection;
-Matrix<double> Viewport;
+Model* model;
+
+struct Shader : public IShader {
+	std::vector<Vector<double>> varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
+	std::vector<Vector<double>> varying_tri; // triangle coordinates (clip coordinates), written by VS, read by FS
+	std::vector<Vector<double>> varying_nrm; // normal per vertex to be interpolated by FS
+	std::vector<Vector<double>> ndc_tri;     // triangle in normalized device coordinates
+
+	virtual Vector<double> vertex(int iface, int nthvert) {//对第iface的第nthvert个顶点进行变换
+		//获得模型uv
+		varying_uv.resize(3);
+		varying_uv[nthvert] = (model->uv(iface, nthvert));
+		//计算MVP矩阵
+		Matrix<double> MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+		//法线变换
+		varying_nrm.resize(3);
+		varying_nrm[nthvert] = (MVP * model->normal(iface, nthvert).homogeneous().toMatrix()).toVector();
+		//坐标变换
+		varying_tri.resize(3);
+		Vector<double> gl_Vertex = (MVP * model->vert(iface, nthvert).homogeneous().toMatrix()).toVector();
+		varying_tri[nthvert] = gl_Vertex;
+		////转换到标准设备坐标系
+		//ndc_tri.resize(3);
+		//ndc_tri[nthvert] = gl_Vertex / gl_Vertex[3];
+		//将转换后的坐标返回
+		return gl_Vertex;
+	}
+
+	virtual bool fragment(Vector<double> weights, TGAColor& color) {
+		////插值uv
+		Vector<double> uv = interpolate_uv(varying_uv,weights);
+
+		////计算法向
+		//Vector<double> n = (B * model->normal(uv)).normalize();
+
+		////计算光照
+		//float diff = std::max(0.f, n * light_dir);
+		//color = model->diffuse(uv) * diff;
+
+		color = model->diffuse(uv);
+		return false;
+	}
+};
 
 
-static Vector<double> viewport_transform(int width, int height, Vector<double> ndc_coord) {
-	float x = (ndc_coord[0] + 1) * 0.5f * (float)width;   /* [-1, 1] -> [0, w] */
-	float y = (ndc_coord[1] + 1) * 0.5f * (float)height;  /* [-1, 1] -> [0, h] */
-	float z = (ndc_coord[2] + 1) * 0.5f;                  /* [-1, 1] -> [0, 1] */
-	return Vector<double>(x, y, z);
+
+void getFPS() {
+	static float framesPerSecond = 0.0f;
+	static int fps = 0;
+	static float lastTime = 0.0f;
+	clock_t  currentTime = clock();
+	++framesPerSecond;
+	std::cout << "Current Frames Per Second:" << fps << std::endl;
+	if ((currentTime - lastTime) / CLOCKS_PER_SEC >= 1.0f)
+	{
+		lastTime = currentTime;
+		fps = (int)framesPerSecond;
+		framesPerSecond = 0;
+	}
 }
+
 
 int main(int argc, char** argv) {
 	if (!init())
@@ -60,20 +109,22 @@ int main(int argc, char** argv) {
 		bool quit = false;
 		//Event handler
 		SDL_Event e;
-
-		//首先执行缩放，接着旋转，最后才是平移
-		//Model = translate(0,0,0.001) * rotate(Vector<double>(0, 0, 1), 0) * scale(1000, 1000, 1000);
-		//Model = translate(0,0,1)  * scale(1, 1, 1);
-		Model.identity();
-		View = lookat(Vector<double>(1, 0, -2), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
-		Projection = setFrustum(70, SCREEN_WIDTH/ SCREEN_HEIGHT, 1, 10);
-		//Viewport = viewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 		//While application is running
 		double timer = 0;
-
 		double* zbuffer = new double[SCREEN_HEIGHT * SCREEN_WIDTH];
+
+		std::vector<const char*> modleName = {
+			"obj/african_head/african_head.obj",
+			"obj/african_head/african_head_eye_inner.obj",
+			//"obj/african_head/african_head_eye_outer.obj",
+		};
+		std::vector<Model> models;
+		for (int m = 0; m < modleName.size(); m++) {
+			models.push_back(Model(modleName[m]));
+		}
+
+		
 		while (!quit){
-			timer+=0.02;
 			//Handle events on queue
 			while (SDL_PollEvent(&e) != 0)
 			{
@@ -86,99 +137,37 @@ int main(int argc, char** argv) {
 			//Clear screen
 			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
 			SDL_RenderClear(gRenderer);
-			
+			getFPS();
+
+			timer += 0.02;
 			for (int i = SCREEN_WIDTH * SCREEN_HEIGHT; i--; zbuffer[i] = 2);
+			//首先执行缩放，接着旋转，最后才是平移
+			//Model = translate(0,0,0.001) * rotate(Vector<double>(0, 0, 1), 0) * scale(1000, 1000, 1000);
+			//Model = translate(0,0,1)  * scale(1, 1, 1);
+			ModelMatrix.identity();
 
-			std::vector<Vector<double>> vertexBuffer =
-			{
-				 Vector<double>(-0.5f, -0.5f, -0.5f),
-				 Vector<double>( 0.5f, -0.5f, -0.5f),
-				 Vector<double>(-0.5f,   0.5f, -0.5f),
-				 Vector<double>( 0.5f,   0.5f, -0.5f),
-				 Vector<double>(-0.5f, -0.5f,   0.5f),
-				 Vector<double>( 0.5f, -0.5f,   0.5f),
-				 Vector<double>(-0.5f,   0.5f,   0.5f),
-				 Vector<double>( 0.5f,   0.5f,   0.5f),
-			};
-
-			std::vector<Vector<int>> colorBuffer =
-			{
-				Vector<int>(255, 0, 0,255),
-				Vector<int>(0, 255, 0,255),
-				Vector<int>(0, 0, 255,255),
-				Vector<int>(0, 255, 0,255),
-				Vector<int>(255, 0, 0,255),
-				Vector<int>(0, 255, 0,255),
-				Vector<int>(0, 0, 255,255),
-				Vector<int>(0, 255, 0,255),
-			};
-
-			static const int index_list[][3] = {
-				 0, 2, 3,
-				 0, 3, 1,
-
-				 0, 4, 6,
-				 0, 6, 2,
-				 
-				 0, 1, 5,
-				 0, 5, 4,
-				 
-				 4, 5, 7,
-				 4, 7, 6,
-				 
-				 1, 3, 7,
-				 1, 7, 5,
-				 
-				 2, 6, 7,
-				 2, 7, 3,
-			};
-
-			
-			/*std::cout << "Model" << std::endl;
-			Model.print();
-			std::cout << "View" << std::endl;
-			View.print();
-			std::cout << "Projection" << std::endl;
-			Projection.print();
-			std::cout << "Viewport" << std::endl;
-			Viewport.print();*/
-
-			double radius = 2;
+			double radius = 5;
 			double camX = sin(timer) * radius;
 			double camZ = cos(timer) * radius;
-			View = lookat(Vector<double>(camX, 1.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+			ViewMatrix = lookat(Vector<double>(camX, 1.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+			//ViewMatrix = lookat(Vector<double>(1, 0, -2), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
 
-			std::vector<Vector<double>> faceVertexBuffer;
-			std::vector<Vector<int>> faceColorBuffer;
-			for (int i = 0; i < 12; ++i)          // 有12个面，循环12次
-			{
-				for (int j = 0; j < 3; j++) { //将面的三个顶点的信息存储起来
-					faceVertexBuffer.push_back(vertexBuffer[index_list[i][j]]);
-					faceColorBuffer.push_back(colorBuffer[index_list[i][j]]);
+			ProjectionMatrix = setFrustum(70, SCREEN_WIDTH / SCREEN_HEIGHT, 1, 10);
+			
+			for (int m = 0; m < models.size(); m++) {
+				Shader shader;
+				model = &models[m];
+				for (int i = 0; i < model->nfaces(); i++) {
+					for (int j = 0; j < 3; j++) {
+						shader.vertex(i, j);
+					}
+					drawTriangle2D(shader.varying_tri,shader, zbuffer,gRenderer,gWindow);
+
+					//draw2DFrame(shader.varying_tri, white, gRenderer, gWindow);
 				}
-
-				for (int k = 0; k < 3; k++) {
-					Matrix<double> vecToMat = faceVertexBuffer[k].homogeneous().toMatrix();
-					//std::cout << "vecToMat" << std::endl;
-					//vecToMat.print();
-					Matrix<double> MVP = Projection * View * Model;
-					Matrix<double> afterChange = MVP * vecToMat;
-					faceVertexBuffer[k] = afterChange.toVector();
-					//std::cout << "afterChange" << std::endl;
-					//faceVertexBuffer[k].print();
-
-					faceVertexBuffer[k] = faceVertexBuffer[k] / faceVertexBuffer[k][3];//ndc坐标
-					faceVertexBuffer[k] = viewport_transform(SCREEN_WIDTH,SCREEN_HEIGHT, faceVertexBuffer[k]);
-					//std::cout << "view" << std::endl;
-					//faceVertexBuffer[k].print();
-				}
-
-				drawTriangle2D(faceVertexBuffer, faceColorBuffer,zbuffer, gRenderer, gWindow);
-				//drawTriangle2D(faceVertexBuffer, Vector<int>(255,255,255,255), gRenderer, gWindow);
-
-				faceVertexBuffer.clear();
-				faceColorBuffer.clear();
+				
 			}
+
 			//Update screen
 			SDL_RenderPresent(gRenderer);
 		}
@@ -195,14 +184,12 @@ int main(int argc, char** argv) {
 
 bool init()
 {
-	View.resize(4, 4);
-	Model.resize(4, 4);
-	View.identity();
-	Model.identity();
-	Viewport.resize(4, 4);
-	Viewport.identity();
-	Projection.resize(4, 4);
-	Projection.identity();
+	ViewMatrix.resize(4, 4);
+	ModelMatrix.resize(4, 4);
+	ViewMatrix.identity();
+	ModelMatrix.identity();
+	ProjectionMatrix.resize(4, 4);
+	ProjectionMatrix.identity();
 
 	//Initialization flag
 	bool success = true;
