@@ -13,12 +13,12 @@
 
 #include <time.h>
 
-Vector<int> white(255, 255, 255, 255);
+TGAColor white(255, 255, 255, 255);
 TGAColor red   = TGAColor(255, 0,   0,   255);
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
+const int SCREEN_WIDTH = 200;
+const int SCREEN_HEIGHT = 200;
 
 //Starts up SDL and creates window
 bool init();
@@ -32,30 +32,36 @@ SDL_Window* gWindow = NULL;
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
 
-Matrix<double> ModelMatrix;
-Matrix<double> ViewMatrix;
-Matrix<double> ProjectionMatrix;
+Matrix ModelMatrix;
+Matrix ViewMatrix;
+Matrix ProjectionMatrix;
+Matrix MVP;
 
 Model* model;
 
 struct Shader : public IShader {
-	std::vector<Vector<double>> varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
-	std::vector<Vector<double>> varying_tri; // triangle coordinates (clip coordinates), written by VS, read by FS
-	std::vector<Vector<double>> varying_nrm; // normal per vertex to be interpolated by FS
-	std::vector<Vector<double>> ndc_tri;     // triangle in normalized device coordinates
+	mat<2, 3, float> varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
+	Vec4f varying_tri[3]; // triangle coordinates (clip coordinates), written by VS, read by FS
+	Vec3f varying_nrm[3]; // normal per vertex to be interpolated by FS
+	Vec3f ndc_tri[3];     // triangle in normalized device coordinates
 
-	virtual Vector<double> vertex(int iface, int nthvert) {//对第iface的第nthvert个顶点进行变换
+	virtual Vec4f vertex(int iface, int nthvert) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
-		varying_uv.resize(3);
-		varying_uv[nthvert] = (model->uv(iface, nthvert));
+		//varying_uv[nthvert] = (model->uv(iface, nthvert));
+		varying_uv.set_col(nthvert, model->uv(iface, nthvert));
 		//计算MVP矩阵
-		Matrix<double> MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+		
 		//法线变换
-		varying_nrm.resize(3);
-		varying_nrm[nthvert] = (MVP * model->normal(iface, nthvert).homogeneous().toMatrix()).toVector();
+		//varying_nrm[nthvert] = (MVP * model->normal(iface, nthvert).homogeneous().toMatrix()).toVector();
+		//varying_nrm[nthvert] = (MVP * model->normal(iface, nthvert).homogeneous().toMatrix()).toVector();
 		//坐标变换
-		varying_tri.resize(3);
-		Vector<double> gl_Vertex = (MVP * model->vert(iface, nthvert).homogeneous().toMatrix()).toVector();
+		//Vec4f gl_Vertex = (MVP * model->vert(iface, nthvert).homogeneous());
+		Vec3f vert = model->vert(iface, nthvert);
+		
+		
+		Vec4f gl_Vertex = (MVP * embed<4>(model->vert(iface, nthvert)));
+		//std::cout<<"after:" << gl_Vertex << std::endl;
+
 		varying_tri[nthvert] = gl_Vertex;
 		////转换到标准设备坐标系
 		//ndc_tri.resize(3);
@@ -64,9 +70,10 @@ struct Shader : public IShader {
 		return gl_Vertex;
 	}
 
-	virtual bool fragment(Vector<double> weights, TGAColor& color) {
+	virtual bool fragment(Vec3f weights, TGAColor& color) {
 		////插值uv
-		Vector<double> uv = interpolate_uv(varying_uv,weights);
+		//Vec2f uv = interpolate_uv(varying_uv,weights);
+		Vec2f uv = varying_uv * weights;
 
 		////计算法向
 		//Vector<double> n = (B * model->normal(uv)).normalize();
@@ -88,9 +95,9 @@ void getFPS() {
 	static float lastTime = 0.0f;
 	clock_t  currentTime = clock();
 	++framesPerSecond;
-	std::cout << "Current Frames Per Second:" << fps << std::endl;
 	if ((currentTime - lastTime) / CLOCKS_PER_SEC >= 1.0f)
 	{
+		std::cout << "Current Frames Per Second:" << fps << std::endl;
 		lastTime = currentTime;
 		fps = (int)framesPerSecond;
 		framesPerSecond = 0;
@@ -118,12 +125,20 @@ int main(int argc, char** argv) {
 			"obj/african_head/african_head_eye_inner.obj",
 			//"obj/african_head/african_head_eye_outer.obj",
 		};
+
 		std::vector<Model> models;
 		for (int m = 0; m < modleName.size(); m++) {
 			models.push_back(Model(modleName[m]));
 		}
 
+		Vec3f camPos(0, 0.0, 0);
+		Vec3f objPos(0, 0, 0);
+		Vec3f up(0, 1, 0);
+
 		
+
+		ProjectionMatrix = setFrustum(70, SCREEN_WIDTH / SCREEN_HEIGHT, 1, 10);
+
 		while (!quit){
 			//Handle events on queue
 			while (SDL_PollEvent(&e) != 0)
@@ -139,21 +154,27 @@ int main(int argc, char** argv) {
 			SDL_RenderClear(gRenderer);
 			getFPS();
 
-			timer += 0.02;
-			for (int i = SCREEN_WIDTH * SCREEN_HEIGHT; i--; zbuffer[i] = 2);
+			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
+
 			//首先执行缩放，接着旋转，最后才是平移
 			//Model = translate(0,0,0.001) * rotate(Vector<double>(0, 0, 1), 0) * scale(1000, 1000, 1000);
 			//Model = translate(0,0,1)  * scale(1, 1, 1);
-			ModelMatrix.identity();
-
-			double radius = 5;
+			
+			timer += 0.02;
+			ModelMatrix= Matrix::identity();
+			double radius = 3;
 			double camX = sin(timer) * radius;
 			double camZ = cos(timer) * radius;
-			ViewMatrix = lookat(Vector<double>(camX, 1.0, camZ), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
-			//ViewMatrix = lookat(Vector<double>(1, 0, -2), Vector<double>(0, 0, 0), Vector<double>(0, 1, 0));
+			camPos[0] = camX;
+			camPos[2] = camZ;
+			ViewMatrix = lookat(camPos, objPos, up);
 
-			ProjectionMatrix = setFrustum(70, SCREEN_WIDTH / SCREEN_HEIGHT, 1, 10);
+			//std::cout << "M:" << ModelMatrix << std::endl;
+			//std::cout << "V:" << ViewMatrix << std::endl;
+			//std::cout << "P:" << ProjectionMatrix << std::endl;
+			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 			
+
 			for (int m = 0; m < models.size(); m++) {
 				Shader shader;
 				model = &models[m];
@@ -162,18 +183,15 @@ int main(int argc, char** argv) {
 						shader.vertex(i, j);
 					}
 					drawTriangle2D(shader.varying_tri,shader, zbuffer,gRenderer,gWindow);
-
 					//draw2DFrame(shader.varying_tri, white, gRenderer, gWindow);
 				}
 				
 			}
-
 			//Update screen
 			SDL_RenderPresent(gRenderer);
 		}
 		delete[] zbuffer;
 	}
-
 	//Free resources and close SDL
 	close();
 
@@ -184,12 +202,24 @@ int main(int argc, char** argv) {
 
 bool init()
 {
-	ViewMatrix.resize(4, 4);
-	ModelMatrix.resize(4, 4);
-	ViewMatrix.identity();
-	ModelMatrix.identity();
-	ProjectionMatrix.resize(4, 4);
-	ProjectionMatrix.identity();
+	//Matrix a = translate(1, 1, 1);
+	//std::cout << "translate:" << a << std::endl;
+
+	//Vec3f b(1, 0, 0);
+	//Vec3f b1(0, 1, 0);
+
+
+	//Vec4f b4 = embed<4>(b);
+	//std::cout << "b:" << b4 << std::endl;
+
+	//Vec3f c = cross(b, b1);
+	//std::cout << "result:" << c << std::endl;
+
+
+
+	ViewMatrix= Matrix::identity();
+	ModelMatrix= Matrix::identity();
+	ProjectionMatrix= Matrix::identity();
 
 	//Initialization flag
 	bool success = true;
@@ -226,7 +256,6 @@ bool init()
 			}
 		}
 	}
-
 	return success;
 }
 
@@ -237,7 +266,6 @@ void close()
 	SDL_DestroyWindow(gWindow);
 	gWindow = NULL;
 	gRenderer = NULL;
-
 	//Quit SDL subsystems
 	SDL_Quit();
 }

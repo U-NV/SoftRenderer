@@ -7,26 +7,26 @@
 
 class Model {
 private:
-    std::vector<Vector<double>> verts_;
-    std::vector<std::vector<Vector<int>> > faces_; // attention, this Vector<int> means vertex/uv/normal
-    std::vector<Vector<double>> norms_;
-    std::vector<Vector<double>> uv_;
+    std::vector<Vec3f> verts_;
+    std::vector<std::vector<Vec3i> > faces_; // attention, this Vec3i means vertex/uv/normal
+    std::vector<Vec3f> norms_;
+    std::vector<Vec2f> uv_;
     TGAImage diffusemap_;
     TGAImage normalmap_;
     TGAImage specularmap_;
-    void load_texture(std::string filename, const char *suffix, TGAImage &img);
+    void load_texture(std::string filename, const char* suffix, TGAImage& img);
 public:
-    Model(const char *filename);
+    Model(const char* filename);
     ~Model();
     int nverts();
     int nfaces();
-    Vector<double> normal(int iface, int nthvert);
-    Vector<double> normal(Vector<double> uv);
-    Vector<double> vert(int i);
-    Vector<double> vert(int iface, int nthvert);
-    Vector<double> uv(int iface, int nthvert);
-    TGAColor diffuse(Vector<double> uv);
-    float specular(Vector<double> uv);
+    Vec3f normal(int iface, int nthvert);
+    Vec3f normal(Vec2f uv);
+    Vec3f vert(int i);
+    Vec3f vert(int iface, int nthvert);
+    Vec2f uv(int iface, int nthvert);
+    TGAColor diffuse(Vec2f uv);
+    float specular(Vec2f uv);
     std::vector<int> face(int idx);
 };
 #endif //__MODEL_H__
