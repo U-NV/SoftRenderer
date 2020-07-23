@@ -9,7 +9,9 @@
 #include "SDL.h"
 #include "SDL_revision.h"
 
-#define PI acos(-1)
+
+#define PI 2*acos(0.0)
+#define DegToRad PI/180.0
 #define EPSILON 1e-5
 //shader
 struct IShader {
@@ -20,7 +22,14 @@ struct IShader {
 
 //สýัง
 template <typename T>
-inline T lerp(T a, T b, double rate);
+inline T lerp(T a, T b, double rate) {
+    return a + (b - a) * rate;
+}
+
+template <typename T>
+inline T clamp(T a, T min,T max) {
+    return std::min<T>(max, std::max<T>(min, a));
+}
 
 //template <typename T>
 //inline Vector<T> cross(const Vector<T>& a, const Vector<T>& b);

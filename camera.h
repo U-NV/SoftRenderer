@@ -11,10 +11,12 @@ public:
 	float FAR;
 	float FOVY;
 	float aspect;
-	float cameraSpeed;
+
+	float yaw = 270;
+	float pitch =0;
 
 	Vec3f camUp = { 0, 1, 0 };
-	Vec3f camPos = { 0, 0, 5 };
+	Vec3f camPos = { 0, 0, 2 };
 	Vec3f camDir = { 0, 0, -1 };
 	Vec3f targetPos = { 0, 0, -1 };
 	//Vec3f targetPos = { 0, 0, 0 };
@@ -23,15 +25,16 @@ public:
 	Matrix ProjectionMatrix;
 
 	Camera();
-	Camera(float screenAspect, float near, float far, float fovy, float speed);
+	Camera(float screenAspect, float near, float far, float fovy);
 	~ Camera();
 
 	inline void setViewMatrix();
 
-	void moveForward();
-	void moveBackward();
-	void moveLeft();
-	void moveRight();
+	void moveStraight(float amount); //前后移动
+	void moveTransverse(float amount); //左右移动
+	void moveVertical(float amount); //上下移动
+	void rotateCamera(Vec2f offset);  // yaw方法
+	void changeFov(float amount);  // yaw方法
 
 	//void moveUp();
 	//void moveDown();

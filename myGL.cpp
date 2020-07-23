@@ -13,11 +13,6 @@ IShader::~IShader() {}
 //	return temp;
 //}
 
-template <typename T>
-inline T lerp(T a, T b, double rate) {
-	return a + (b - a) * rate;
-}
-
 //将坐标系原点改为左下角
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,TGAColor & color)
 {
