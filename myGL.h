@@ -31,6 +31,10 @@ inline T lerp(T a, T b, double rate);
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y, TGAColor& color);
 void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+
+void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+
+
 void draw2DFrame(Vec4f* vertexBuffer, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 //void drawTriangle2D(std::vector<Vector<double>> &vertexBuffer, std::vector<Vector<int>> &colorBuffer,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);

@@ -148,12 +148,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="camera.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="myGL.h" />
     <ClInclude Include="myVector.h" />
     <ClInclude Include="tgaimage.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="camera.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="myGL.cpp" />

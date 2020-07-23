@@ -63,6 +63,11 @@ void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_
 }
 
 
+void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+    drawLine(a.x, a.y, b.x, b.y, color, gRenderer, gWindow);
+}
+
+
 static Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
 	Vec2f ab = B - A;//  = b - a;
 	Vec2f ac = C - A;//  = c - a;
@@ -217,7 +222,7 @@ void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader,double* zbuffer, SDL_Re
 
 Matrix translate(double x, double y, double z) {
 	Matrix t;
-	t= Matrix::identity();
+	t = Matrix::identity();
 	t[0][3] = x;
 	t[1][3] = y;
 	t[2][3] = z;
@@ -241,8 +246,8 @@ Matrix rotate(Vec3f &axis,double theta) {
 	double cosTheta = std::cos(theta);
 	double sinTheta = std::sin(theta);
 
-	std::cout << "sinAngle:" << sinTheta << std::endl;
-	std::cout << "cosAngle:" << cosTheta << std::endl;
+	//std::cout << "sinAngle:" << sinTheta << std::endl;
+	//std::cout << "cosAngle:" << cosTheta << std::endl;
 	double u = axis[0];
 	double v = axis[1];
 	double w = axis[2];

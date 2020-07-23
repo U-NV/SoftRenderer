@@ -3,10 +3,13 @@
 #include <sstream>
 #include "model.h"
 
-Model::Model(const char* filename) : verts_(), faces_(), norms_(), uv_(), diffusemap_(), normalmap_(), specularmap_() {
+Model::Model(const std::string filename) : verts_(), faces_(), norms_(), uv_(), diffusemap_(), normalmap_(), specularmap_() {
     std::ifstream in;
     in.open(filename, std::ifstream::in);
-    if (in.fail()) return;
+    if (in.fail()) {
+        std::cout << "can't open file "<< filename << std::endl;
+        return;
+    }
     std::string line;
     while (!in.eof()) {
         std::getline(in, line);
