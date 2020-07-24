@@ -63,16 +63,9 @@ inline T clamp(T a, T min,T max) {
 
 //点线面
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y, TGAColor& color);
-void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-
-void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-
-
-void draw2DFrame(Vec4f* vertexBuffer, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-//void drawTriangle2D(std::vector<Vector<double>> &vertexBuffer, std::vector<Vector<int>> &colorBuffer,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+void draw2DFrame(VerInf* vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 void triangle(VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
+
 //模型矩阵
 Matrix translate(double x, double y, double z);
 Matrix rotate(Vec3f& axis, double theta);

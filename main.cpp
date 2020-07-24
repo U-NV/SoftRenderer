@@ -295,9 +295,8 @@ int main(int argc, char** argv) {
 					for (int j = 0; j < 3; j++) {
 						 shader.vertex(i, j, faceVer[j]);
 					}
-					triangle(faceVer,shader,zbuffer,gRenderer,gWindow);
-					//drawTriangle2D(shader.varying_tri,shader, zbuffer,gRenderer,gWindow);
-					//draw2DFrame(shader.varying_tri, white, gRenderer, gWindow);
+					//triangle(faceVer,shader,zbuffer,gRenderer,gWindow);
+					draw2DFrame(faceVer, white, gRenderer, gWindow);
 				}
 				
 			}

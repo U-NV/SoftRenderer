@@ -7,6 +7,8 @@ Matrix ViewMatrix;
 Matrix ProjectionMatrix;
 Matrix MVP;
 
+int width = 0, height = 0;
+
 //将坐标系原点改为左下角
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,TGAColor & color)
 {
@@ -63,13 +65,7 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	return signed_area <= 0;
 }
 void draw2DFrame(VerInf* vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	int w = 0, h = 0;
-	SDL_GetWindowSize(gWindow, &w, &h);
-
-	Vec3f ndc_coords[3];
-	Vec2i screen_coords[3];
-
-
+	SDL_GetWindowSize(gWindow, &width, &height);
 	/* reciprocals of w */
 	for (int i = 0; i < 3; i++) {
 		vertexs[i].recip_w = 1 / vertexs[i].clip_coord[3];
@@ -84,9 +80,10 @@ void draw2DFrame(VerInf* vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_
 		return;
 	}
 
+	Vec2i screen_coords[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(w, h, ndc_coords[i]);
+		Vec3f window_coord = viewport_transform(width, height, vertexs[i].ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord[0], (int)window_coord[1]);
 	}
 
@@ -210,9 +207,6 @@ bool Inside(const Vec4f& line, const Vec4f& p) {
 //	return output;
 //}
 
-
-
-int width = 0, height = 0;
 void drawTriangle2D(VerInf* verInf, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
