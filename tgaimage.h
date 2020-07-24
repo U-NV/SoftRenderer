@@ -55,7 +55,17 @@ struct TGAColor {
     TGAColor operator *(float intensity) const {
         TGAColor res = *this;
         intensity = (intensity > 1.f ? 1.f : (intensity < 0.f ? 0.f : intensity));
-        for (int i = 0; i < 4; i++) res.bgra[i] = bgra[i] * intensity;
+        for (int i = 0; i < 3; i++) res.bgra[i] = bgra[i] * intensity;
+        return res;
+    }
+    
+    TGAColor operator +(TGAColor b) const {
+        TGAColor res = *this;
+        for (int i = 0; i < 4; i++) {
+            res.bgra[i] = res.bgra[i] + b.bgra[i];
+            res.bgra[i] = res.bgra[i] >= 255 ? 255 : res.bgra[i];
+            res.bgra[i] = res.bgra[i] <= 0 ? 0 : res.bgra[i];
+        }
         return res;
     }
 };

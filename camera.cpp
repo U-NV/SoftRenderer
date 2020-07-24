@@ -54,10 +54,6 @@ void Camera::changeFov(float amount)
 
 void Camera::rotateCamera(Vec2f offset)
 {
-	float sensitivity = 10.0f;
-	offset.x *= sensitivity;
-	offset.y *= sensitivity;
-
 	yaw += offset.x;
 	pitch += offset.y;
 

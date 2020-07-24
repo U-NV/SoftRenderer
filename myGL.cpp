@@ -9,14 +9,44 @@ Matrix MVP;
 
 int width = 0, height = 0;
 
+TGAColor white(255, 255, 255, 255);
+TGAColor red = TGAColor(255, 0, 0, 255);
+
+VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
+{
+	VerInf result;
+	result.clip_coord = lerp(v1.clip_coord, v2.clip_coord, factor);
+	result.world_pos = lerp(v1.world_pos, v2.world_pos, factor);
+	result.uv = lerp(v1.uv, v2.uv, factor);
+	result.normal = lerp(v1.normal, v2.normal, factor);
+	result.ndc_coord = lerp(v1.ndc_coord, v2.ndc_coord, factor);
+
+	return result;
+}
+
 //将坐标系原点改为左下角
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,TGAColor & color)
 {
-	int w = 0, h = 0;
 	SDL_SetRenderDrawColor(gRenderer, color[2], color[1], color[0], color[3]);
-	SDL_GetWindowSize(gWindow, &w, &h);
-	SDL_RenderDrawPoint(gRenderer, x, h - 1 - y);
+	SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
 }
+
+Uint32 getpixel(SDL_Surface* surface, int x, int y)
+{
+	y = height - 1 - y;
+	int bpp = surface->format->BytesPerPixel;
+	/* Here p is the address to the pixel we want to retrieve */
+	Uint32* p = (Uint32*)surface->pixels + y * surface->pitch + x * bpp;
+	return *p;
+}
+
+inline TGAColor blendColor(TGAColor& newColor, TGAColor& oldColor) {
+	TGAColor result;
+	float alpha = newColor[3] / 255.0f;
+	result = newColor * alpha + oldColor * (1 - alpha);
+	return result;
+}
+
 void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     bool steep = false;
     if (std::abs(x0 - x1) < std::abs(y0 - y1)) {
@@ -64,26 +94,11 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	float signed_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 	return signed_area <= 0;
 }
-void draw2DFrame(VerInf* vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	SDL_GetWindowSize(gWindow, &width, &height);
-	/* reciprocals of w */
-	for (int i = 0; i < 3; i++) {
-		vertexs[i].recip_w = 1 / vertexs[i].clip_coord[3];
-	}
-	/* perspective division */
-	for (int i = 0; i < 3; i++) {
-		vertexs[i].ndc_coord = proj<3>(vertexs[i].clip_coord) * vertexs[i].recip_w;
-	}
-	/* back-face culling */
-	if (is_back_facing(vertexs[0].ndc_coord, vertexs[1].ndc_coord, vertexs[2].ndc_coord)) {
-		//std::cout << "back_facing" << std::endl;
-		return;
-	}
-
+void draw2DFrame(VerInf** vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	Vec2i screen_coords[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(width, height, vertexs[i].ndc_coord);
+		Vec3f window_coord = viewport_transform(width, height, vertexs[i]->ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord[0], (int)window_coord[1]);
 	}
 
@@ -126,14 +141,19 @@ inline Vec3f interpolate(Vec3f& a, Vec3f& b, Vec3f& c, Vec3f& weights) {
 	);
 }
 
-
-inline bool AllVertexsInside(const std::vector<Vec2f> &ver) {
-	for (int i = 0; i < 3; i++) {
-		if (ver[i].x > 1 || ver[i].x < -1)
-			return false;
-		if (ver[i].y > 1 || ver[i].y < -1)
-			return false;
-	}
+inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
+	if (v1.x > 1 || v1.x < -1)
+		return false;
+	if (v1.y > 1 || v1.y < -1)
+		return false;
+	if (v2.x > 1 || v2.x < -1)
+		return false;
+	if (v2.y > 1 || v2.y < -1)
+		return false;
+	if (v3.x > 1 || v3.x < -1)
+		return false;
+	if (v3.y > 1 || v3.y < -1)
+		return false;
 	return true;
 }
 
@@ -153,8 +173,7 @@ inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
 	return false;
 }
 
-
-
+// Ax + By + C < 0 就在内侧
 const Vec4f ViewLines[] = {
 	//Near
 	Vec4f(0,0,1,1),
@@ -169,51 +188,50 @@ const Vec4f ViewLines[] = {
 	//bottom 
 	Vec4f(0,-1,0,1)
 };
-bool Inside(const Vec4f& line, const Vec4f& p) {
+inline bool Inside(const Vec4f& line, const Vec4f& p) {
 	return line.x * p.x + line.y * p.y + line.z * p.z + line.w * p.w >= 0;
 }
-//交点，通过端点插值
-//Vec2f Intersect(const V2F& v1, const V2F& v2, const Vec4f& line) {
-//	float da = v1.windowPos.x * line.x + v1.windowPos.y * line.y + v1.windowPos.z * line.z + line.w * v1.windowPos.w;
-//	float db = v2.windowPos.x * line.x + v2.windowPos.y * line.y + v2.windowPos.z * line.z + line.w * v2.windowPos.w;
-//
-//	float weight = da / (da - db);
-//	return V2F::lerp(v1, v2, weight);
-//}
-//std::vector<Vec2f> SutherlandHodgeman(const Vec2f& v1, const Vec2f& v2, const Vec2f& v3) {
-//	std::vector<Vec2f> output = { v1,v2,v3 };
-//	if (AllVertexsInside(output)) {
-//		return output;
-//	}
-//	for (int i = 0; i < 5; i++) {
-//		std::vector<Vec2f> input(output);
-//		output.clear();
-//		for (int j = 0; j < input.size(); j++) {
-//			Vec2f current = input[j];
-//			Vec2f last = input[(j + input.size() - 1) % input.size()];
-//			if (Inside(ViewLines[i], current.windowPos)) {
-//				if (!Inside(ViewLines[i], last.windowPos)) {
-//					V2F intersecting = Intersect(last, current, ViewLines[i]);
-//					output.push_back(intersecting);
-//				}
-//				output.push_back(current);
-//			}
-//			else if (Inside(ViewLines[i], last.windowPos)) {
-//				Vec2f intersecting = Intersect(last, current, ViewLines[i]);
-//				output.push_back(intersecting);
-//			}
-//		}
-//	}
-//	return output;
-//}
+inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
+	float da = v1.clip_coord.x * line.x + v1.clip_coord.y * line.y + v1.clip_coord.z * line.z + line.w * v1.clip_coord.w;
+	float db = v2.clip_coord.x * line.x + v2.clip_coord.y * line.y + v2.clip_coord.z * line.z + line.w * v2.clip_coord.w;
 
-void drawTriangle2D(VerInf* verInf, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+	float weight = da / (da - db);
+	return VerInf::verLerp(v1, v2, weight);
+}
+std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const VerInf& v3) {
+	std::vector<VerInf> output = { v1,v2,v3 };
+	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord)) {
+		return output;
+	}
+	for (int i = 0; i < 6; i++) {
+		std::vector<VerInf> input(output);
+		output.clear();
+		for (int j = 0; j < input.size(); j++) {
+			VerInf current = input[j];
+			VerInf last = input[(j + input.size() - 1) % input.size()];
+			if (Inside(ViewLines[i], current.clip_coord)) {
+				if (!Inside(ViewLines[i], last.clip_coord)) {
+					VerInf intersecting = Intersect(last, current, ViewLines[i]);
+					output.push_back(intersecting);
+				}
+				output.push_back(current);
+			}
+			else if (Inside(ViewLines[i], last.clip_coord)) {
+				VerInf intersecting = Intersect(last, current, ViewLines[i]);
+				output.push_back(intersecting);
+			}
+		}
+	}
+	return output;
+}
+
+void drawTriangle2D(VerInf** verInf, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
 	
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(width, height, verInf[i].ndc_coord);
+		Vec3f window_coord = viewport_transform(width, height, verInf[i]->ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord.x, (int)window_coord.y);
 		screen_depths[i] = window_coord.z;
 	}
@@ -244,19 +262,27 @@ void drawTriangle2D(VerInf* verInf, IShader& shader, double* zbuffer, SDL_Render
 				double frag_depth = interpolate_depth(screen_depths, weights);
 
 				if (frag_depth <= zbuffer[zbufferInd]) {
-					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i].recip_w;
+					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
 					weights = weights / (weights[0] + weights[1] + weights[2]);
 					
 					VerInf temp;
-					temp.uv = interpolate(verInf[0].uv, verInf[1].uv, verInf[2].uv,weights);
-					temp.world_pos = interpolate(verInf[0].world_pos, verInf[1].world_pos, verInf[2].world_pos,weights);
-					temp.normal = interpolate(verInf[0].normal, verInf[1].normal, verInf[2].normal,weights);
+					temp.uv = interpolate(verInf[0]->uv, verInf[1]->uv, verInf[2]->uv,weights);
+					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos,weights);
+					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal,weights);
 
 					bool discard = shader.fragment(temp, color);
 					//std::cout << frag_depth << " : " << frag_depth * 255 << std::endl;
 					//color = TGAColor(frag_depth * 255, frag_depth * 255, frag_depth * 255, 255);
 					if (!discard) {
 						zbuffer[zbufferInd] = frag_depth;
+						//TGAColor colorNow;
+						//SDL_Surface* gSurface = SDL_GetWindowSurface(gWindow);
+
+						//Uint32 data = getpixel(gSurface, P[0], P[1]);
+						//SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
+						//SDL_GetRGBA(data, format, &colorNow[2], &colorNow[1], &colorNow[0], &colorNow[3]);
+						////std::cout << colorNow[2] <<"-"<< colorNow[1] << "-" << colorNow[0] << "-" << colorNow[3] << std :: endl;
+						//color = blendColor(color, colorNow);
 						SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
 					}
 				}
@@ -264,27 +290,41 @@ void drawTriangle2D(VerInf* verInf, IShader& shader, double* zbuffer, SDL_Render
 
 		}
 	}
-
 }
 
-void triangle(VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void triangle(bool farme,VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	SDL_GetWindowSize(gWindow, &width, &height);
 
-	/* reciprocals of w */
-	for (int i = 0; i < 3; i++) {
-		vertexs[i].recip_w = 1 / vertexs[i].clip_coord[3];
-	}
-	/* perspective division */
-	for (int i = 0; i < 3; i++) {
-		vertexs[i].ndc_coord = proj<3>(vertexs[i].clip_coord) * vertexs[i].recip_w;
-	}
-	/* back-face culling */
-	if (is_back_facing(vertexs[0].ndc_coord, vertexs[1].ndc_coord, vertexs[2].ndc_coord)) {
-		//std::cout << "back_facing" << std::endl;
+	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord)) {
 		return;
 	}
+	
+	VerInf *verList[3];
+	std::vector<VerInf> clipingVertexs = SutherlandHodgeman(vertexs[0], vertexs[1], vertexs[2]);
 
-	drawTriangle2D(vertexs, shader, zbuffer, gRenderer, gWindow);
+	/* perspective division */
+	for (int i = 0; i < clipingVertexs.size(); i++) {
+		clipingVertexs[i].recip_w = 1 / clipingVertexs[i].clip_coord[3];
+		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord) * clipingVertexs[i].recip_w;
+	}
+
+	int n = clipingVertexs.size() - 3 + 1;
+	for (int i = 0; i < n; i++) {
+		verList[0] = &clipingVertexs[0];
+		verList[1] = &clipingVertexs[i + 1];
+		verList[2] = &clipingVertexs[i + 2];
+
+		/* back-face culling */
+		if (is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
+			//std::cout << "back_facing" << std::endl;
+			return;
+		}
+		if (farme)
+			draw2DFrame(verList, white, gRenderer, gWindow);
+		else
+			drawTriangle2D(verList, shader, zbuffer, gRenderer, gWindow);
+	}
+
 }
 
 
@@ -410,7 +450,7 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	return projection;
 }
 
-static Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
+Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
 	double x = double((double)ndc_coord.x + 1.0f) * 0.5f * (double)width;   /* [-1, 1] -> [0, w] */
 	double y = double((double)ndc_coord.y + 1.0f) * 0.5f * (double)height;  /* [-1, 1] -> [0, h] */
 	double z = double((double)ndc_coord.z + 1.0f) * 0.5f;                  /* [-1, 1] -> [0, 1] */
@@ -418,55 +458,3 @@ static Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
 }
 
 
-
-
-
-//void drawTriangle2D(std::vector<Vector<double>>& vertexBuffer, std::vector<Vector<int>>& colorBuffer, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-//	int w = 0, h = 0;
-//	SDL_GetWindowSize(gWindow, &w, &h);
-//
-//	std::vector<Vector<int>> screen_coords(3);
-//	double screen_depths[3];
-//	for (int i = 0; i < 3; i++) {
-//		screen_coords[i] = Vector<int>((int)vertexBuffer[i][0], (int)vertexBuffer[i][1]);
-//		screen_depths[i] = vertexBuffer[i][2];
-//	}
-//
-//	Vector<int> bboxmin(w - 1, h - 1);
-//	Vector<int> bboxmax(0, 0);
-//	Vector<int> clamp(w - 1, h - 1);
-//	for (int i = 0; i < 3; i++) {
-//		bboxmin[0] = std::max(0, std::min(bboxmin[0], screen_coords[i][0]));
-//		bboxmax[0] = std::min(clamp[0], std::max(bboxmax[0], screen_coords[i][0]));
-//
-//		bboxmin[1] = std::max(0, std::min(bboxmin[1], screen_coords[i][1]));
-//		bboxmax[1] = std::min(clamp[1], std::max(bboxmax[1], screen_coords[i][1]));
-//	}
-//	//std::cout << "bboxmin[0]" << std::endl;
-//	//bboxmin.print();
-//	//bboxmax.print();
-//	Vector<int> P(0, 0);
-//	for (P[0] = bboxmin[0]; P[0] <= bboxmax[0]; P[0]++) {
-//		for (P[1] = bboxmin[1]; P[1] <= bboxmax[1]; P[1]++) {
-//			Vector<double> weights = calculate_weights(screen_coords, P);
-//			int weight0_okay = weights[0] > -EPSILON;
-//			int weight1_okay = weights[1] > -EPSILON;
-//			int weight2_okay = weights[2] > -EPSILON;
-//			if (weight0_okay && weight1_okay && weight2_okay) {
-//				int zbufferInd = (int)P[0] + (int)P[1] * w;
-//				double frag_depth = interpolate_depth(screen_depths, weights);
-//				if (frag_depth <= zbuffer[zbufferInd]) {
-//					zbuffer[zbufferInd] = frag_depth;
-//
-//					int depthColor = frag_depth * 255;
-//					Vector<int> color = Vector<int>(depthColor, depthColor, depthColor, 255);
-//					//std::cout << depthColor << std::endl;
-//
-//					SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
-//				}
-//			};
-//
-//		}
-//	}
-//
-//}

@@ -11,14 +11,12 @@
 
 #include <time.h>
 
-TGAColor white(255, 255, 255, 255);
-TGAColor red   = TGAColor(255, 0,   0,   255);
 
 bool SDL_Runing = false;
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 1280;
-const int SCREEN_HEIGHT = 720;
+const int SCREEN_WIDTH = 400;
+const int SCREEN_HEIGHT = 400;
 
 //Starts up SDL and creates window
 bool init();
@@ -28,6 +26,8 @@ void close();
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
+
+SDL_Texture* gTexture = NULL;
 
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
@@ -73,6 +73,11 @@ inline void handlerKeyboardEvent() {
 	if (rightKeyPress || leftKeyPress) {
 		Vec2f offset = MousePosNow - MousePosPre;
 		MousePosPre = MousePosNow;
+
+		double sensitivity = 10;
+		offset.x *= sensitivity;
+		offset.y *= sensitivity;
+
 		if (rightKeyPress) {
 			defaultCamera.rotateCamera(offset * deltaTime);
 		}
@@ -186,7 +191,7 @@ struct Shader : public IShader {
 		//Vec3f normal = (B * model->normal(uv)).normalize();
 
 		//设置光照
-		float ambient = 0.2f;
+		float ambient = 0.0f;
 		float lightPower = 1.5;
 
 		Vec3f vertPos = verInf.world_pos;
@@ -208,6 +213,7 @@ struct Shader : public IShader {
 			float rate = clamp<float>(ambient + (1 * diff + 1 * spec + 1*uvspecular)/dis / dis * lightPower,0,10);
 			color[i] = clamp<int>((float)c[i] * rate,0,255);
 		}
+
 		return false;
 	}
 };
@@ -223,10 +229,11 @@ int main(int argc, char** argv) {
 
 		//模型信息
 		std::vector<std::string> modleName = {
-			"obj/african_head/african_head.obj",
-			"obj/african_head/african_head_eye_inner.obj",
-			//"obj/diablo3_pose/diablo3_pose.obj",
+			//"obj/african_head/african_head.obj",
+			//"obj/african_head/african_head_eye_inner.obj",
+			"obj/diablo3_pose/diablo3_pose.obj",
 			"obj/floor.obj",
+			"obj/window.obj",
 		};
 
 		std::vector<Model> models;
@@ -256,9 +263,14 @@ int main(int argc, char** argv) {
 			getMouseKeyEven(NULL);
 
 			//Clear screen
-			SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 0xFF);
-			SDL_RenderClear(gRenderer);
+		/*	SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
+			SDL_RenderClear(gRenderer);*/
 			
+			SDL_SetRenderTarget(gRenderer, gTexture);
+			SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
+			SDL_RenderClear(gRenderer);
+
+
 			//get delta time
 			clock_t currentFrame = clock();
 			deltaTime = float((float)currentFrame - lastFrame)/ CLOCKS_PER_SEC;
@@ -295,15 +307,17 @@ int main(int argc, char** argv) {
 					for (int j = 0; j < 3; j++) {
 						 shader.vertex(i, j, faceVer[j]);
 					}
-					//triangle(faceVer,shader,zbuffer,gRenderer,gWindow);
-					draw2DFrame(faceVer, white, gRenderer, gWindow);
+					triangle(false,faceVer,shader,zbuffer,gRenderer,gWindow);
+					//triangle(true,faceVer,shader,zbuffer,gRenderer,gWindow);
 				}
 				
 			}
 			//Update screen
-			SDL_RenderPresent(gRenderer);
+			//SDL_RenderPresent(gRenderer);
 
-			
+			SDL_SetRenderTarget(gRenderer, NULL);
+			SDL_RenderCopy(gRenderer,gTexture, NULL, NULL);
+			SDL_RenderPresent(gRenderer);
 		}
 		delete[] zbuffer;
 	}
@@ -320,7 +334,7 @@ void drawWindowTGA() {
 	int midW = imageW / 2;
 	int lineW = 10;
 	int halfLineW = lineW/2;
-	TGAImage frame(imageW, imageH, TGAImage::RGB);
+	TGAImage frame(imageW, imageH, TGAImage::RGBA);
 
 	TGAColor frameColor(100, 80, 100, 255);
 	TGAColor windowColor(0, 200, 255, 128);
@@ -341,7 +355,7 @@ void drawWindowTGA() {
 		}
 	}
 	frame.flip_vertically(); // to place the origin in the bottom left corner of the image
-	frame.write_tga_file("alpha.tga");
+	frame.write_tga_file("window_diffuse.tga");
 }
 
 bool init()
@@ -353,6 +367,8 @@ bool init()
 
 	//Initialization flag
 	bool success = true;
+
+	
 
 	//Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -378,12 +394,18 @@ bool init()
 		else
 		{
 			//Create renderer for window
-			gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
+			//gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
+			gRenderer = SDL_CreateRenderer(gWindow, -1, 0);
 			if (gRenderer == NULL)
 			{
 				printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
 				success = false;
 			}
+
+
+			gTexture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+			SDL_SetTextureBlendMode(gTexture, SDL_BLENDMODE_BLEND);
+			SDL_SetRenderDrawBlendMode(gRenderer, SDL_BLENDMODE_BLEND);
 		}
 	}
 	return success;
@@ -393,9 +415,11 @@ void close()
 {
 	//Destroy window    
 	SDL_DestroyRenderer(gRenderer);
-	SDL_DestroyWindow(gWindow);
+	SDL_DestroyWindow(gWindow); 
+	SDL_DestroyTexture(gTexture);
 	gWindow = NULL;
 	gRenderer = NULL;
+	gTexture = NULL;
 	//Quit SDL subsystems
 	SDL_Quit();
 }

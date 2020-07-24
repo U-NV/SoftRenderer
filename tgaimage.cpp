@@ -252,7 +252,10 @@ TGAColor TGAImage::get(int x, int y) {
     if (!data || x < 0 || y < 0 || x >= width || y >= height) {
         return TGAColor();
     }
-    return TGAColor(data + (x + y * width) * bytespp, bytespp);
+    TGAColor color(data + (x + y * width) * bytespp, bytespp);
+    if (bytespp == 3)
+        color[3] = 255;
+    return color;
 }
 
 bool TGAImage::set(int x, int y, TGAColor& c) {

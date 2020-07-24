@@ -79,7 +79,7 @@ void Model::load_texture(std::string filename, const char* suffix, TGAImage& img
     size_t dot = texfile.find_last_of(".");
     if (dot != std::string::npos) {
         texfile = texfile.substr(0, dot) + std::string(suffix);
-        std::cerr << "texture file " << texfile << " loading " << (img.read_tga_file(texfile.c_str()) ? "ok" : "failed") << std::endl;
+        std::cerr << "texture file " << texfile <<" "<< img.get_bytespp() <<" get_bytespp" << " loading " << (img.read_tga_file(texfile.c_str()) ? "ok" : "failed") << std::endl;
         img.flip_vertically();
     }
 }

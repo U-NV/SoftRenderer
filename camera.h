@@ -4,8 +4,6 @@
 #include"myVector.h"
 #include"myGL.h"
 
-
-
 class  Camera
 {
 public:
@@ -38,9 +36,6 @@ public:
 	void rotateCamera(Vec2f offset);  // yaw方法
 	void changeFov(float amount);  // yaw方法
 
-	//void moveUp();
-	//void moveDown();
-	//
 	Matrix getViewMatrix();
 	Matrix getProjMatrix();
 };
