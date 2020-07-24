@@ -1,8 +1,5 @@
-#include "tgaimage.h"
-#include "myVector.h"
 #include "myGL.h"
 #include "model.h"
-#include "camera.h"
 
 #include <vector>
 #include <limits>
@@ -35,13 +32,7 @@ SDL_Window* gWindow = NULL;
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
 
-Matrix ModelMatrix;
-Matrix ViewMatrix;
-Matrix ProjectionMatrix;
-Matrix MVP;
-
 Model* model;
-Camera camera;
 
 Vec3f lightPos(1, 0.5,1);
 
@@ -55,36 +46,35 @@ bool leftKeyPress = false;
 int mouseWheelAmount = 0;
 Vec2f MousePosNow(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 Vec2f MousePosPre(SCREEN_WIDTH/2, SCREEN_HEIGHT/2);
-
 inline void handlerKeyboardEvent() {
 	float cameraSpeed = 2.0f * deltaTime;
 	if (keysEvent[SDLK_ESCAPE]) {
 		SDL_Runing = false;
 	}
 	if (keysEvent[SDLK_w]) {
-		camera.moveStraight(cameraSpeed);
+		defaultCamera.moveStraight(cameraSpeed);
 	}
 	if (keysEvent[SDLK_s]) {
-		camera.moveStraight(-cameraSpeed);
+		defaultCamera.moveStraight(-cameraSpeed);
 	}
 	if (keysEvent[SDLK_a]) {
-		camera.moveTransverse(-cameraSpeed);
+		defaultCamera.moveTransverse(-cameraSpeed);
 	}
 	if (keysEvent[SDLK_d]) {
-		camera.moveTransverse(cameraSpeed);
+		defaultCamera.moveTransverse(cameraSpeed);
 	}
 	if (keysEvent[SDLK_e]) {
-		camera.moveVertical(cameraSpeed);
+		defaultCamera.moveVertical(cameraSpeed);
 	}
 	if (keysEvent[SDLK_q]) {
-		camera.moveVertical(-cameraSpeed);
+		defaultCamera.moveVertical(-cameraSpeed);
 	}
 
 	if (rightKeyPress || leftKeyPress) {
 		Vec2f offset = MousePosNow - MousePosPre;
 		MousePosPre = MousePosNow;
 		if (rightKeyPress) {
-			camera.rotateCamera(offset * deltaTime);
+			defaultCamera.rotateCamera(offset * deltaTime);
 		}
 		if (leftKeyPress) {
 			
@@ -92,7 +82,7 @@ inline void handlerKeyboardEvent() {
 	}
 
 	if (mouseWheelAmount != 0) {
-		camera.changeFov(- mouseWheelAmount  * cameraSpeed);
+		defaultCamera.changeFov(- mouseWheelAmount  * cameraSpeed);
 		mouseWheelAmount = 0;
 	}
 }
@@ -157,43 +147,24 @@ int getMouseKeyEven(void* opaque) {
 }
 
 struct Shader : public IShader {
-	mat<2, 3, float> varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
-	mat<3, 3, float> varying_nrm; // normal per vertex to be interpolated by FS
-	//mat<3, 3, float> ndc_tri;
-	mat<3, 3, float> varying_vert; // 世界坐标系坐标
-
-	Vec4f varying_tri[3]; // triangle coordinates (clip coordinates), written by VS, read by FS
-
-
-	virtual Vec4f vertex(int iface, int nthvert) {//对第iface的第nthvert个顶点进行变换
+	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
-		varying_uv.set_col(nthvert, model->uv(iface, nthvert));
-
+		faceVer.uv = model->uv(iface, nthvert);
 		//法线变换
-		varying_nrm.set_col(nthvert, proj<3>(MVP.invert_transpose() * embed<4>(model->normal(iface, nthvert), 0.f)));
-
+		faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(model->normal(iface, nthvert), 0.f));
 		//世界坐标
-		Vec4f temp = (ModelMatrix * embed<4>(model->vert(iface, nthvert)));
-		varying_vert.set_col(nthvert, proj<3>(temp));
-
+		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(model->vert(iface, nthvert)));
 		//裁切坐标
-		Vec4f gl_Vertex = (MVP * embed<4>(model->vert(iface, nthvert)));
-		varying_tri[nthvert] = gl_Vertex;
-
-		//标准设备坐标
-		//ndc_tri.set_col(nthvert, proj<3>(gl_Vertex / gl_Vertex[3]));
-
-		//将转换后的坐标返回
-		return gl_Vertex;
+		faceVer.clip_coord = MVP * embed<4>(model->vert(iface, nthvert));
 	}
 
-	virtual bool fragment(Vec3f weights, TGAColor& color) {
+	virtual bool fragment(VerInf verInf, TGAColor& color) {
 		//插值uv
-		Vec2f uv = varying_uv * weights;
+		Vec2f uv = verInf.uv;
 
 		//插值法向量
-		//Vec3f normal = (varying_nrm * weights).normalize();
-		Vec3f normal = model->normal(uv); //(varying_nrm * weights).normalize();
+		//Vec3f normal = verInf.normal;
+		Vec3f normal = model->normal(uv); 
 
 		//Vec3f bn = (varying_nrm * weights).normalize();
 
@@ -218,12 +189,12 @@ struct Shader : public IShader {
 		float ambient = 0.2f;
 		float lightPower = 1.5;
 
-		Vec3f vertPos = varying_vert * weights;
+		Vec3f vertPos = verInf.world_pos;
 		Vec3f lightDir = (lightPos - vertPos);
 		float dis = lightDir.norm();
 		lightDir = lightDir / dis;
 
-		Vec3f viewDir = (camera.camPos - vertPos).normalize();
+		Vec3f viewDir = (defaultCamera.camPos - vertPos).normalize();
 
 		Vec3f hafe = (lightDir + viewDir).normalize();
 
@@ -237,11 +208,9 @@ struct Shader : public IShader {
 			float rate = clamp<float>(ambient + (1 * diff + 1 * spec + 1*uvspecular)/dis / dis * lightPower,0,10);
 			color[i] = clamp<int>((float)c[i] * rate,0,255);
 		}
-
 		return false;
 	}
 };
-
 int main(int argc, char** argv) {
 	if (!init())
 	{
@@ -254,9 +223,9 @@ int main(int argc, char** argv) {
 
 		//模型信息
 		std::vector<std::string> modleName = {
-			//"obj/african_head/african_head.obj",
-			//"obj/african_head/african_head_eye_inner.obj",
-			"obj/diablo3_pose/diablo3_pose.obj",
+			"obj/african_head/african_head.obj",
+			"obj/african_head/african_head_eye_inner.obj",
+			//"obj/diablo3_pose/diablo3_pose.obj",
 			"obj/floor.obj",
 		};
 
@@ -265,7 +234,7 @@ int main(int argc, char** argv) {
 			models.push_back(Model(modleName[m]));
 		}
 		//创建相机
-		camera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT,0.1,100,60);
+		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT,0.1,100,60);
 
 		//MVP矩阵相关参数
 		Vec3f objPos(0, 0, 0);
@@ -307,26 +276,27 @@ int main(int argc, char** argv) {
 			//ModelMatrix = rotate(up, timer);
 			//std::cout << ModelMatrix <<std::endl;
 			//ModelMatrix= Matrix::identity();
-			ViewMatrix = camera.getViewMatrix();
-			ProjectionMatrix = camera.getProjMatrix();
+			ViewMatrix = defaultCamera.getViewMatrix();
+			ProjectionMatrix = defaultCamera.getProjMatrix();
 			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
-			//angle += 60 * deltaTime;
-			//float radio = 2;
-			//float lightX = radio * cos(angle * DegToRad);
-			//float lightZ = radio * sin(angle * DegToRad);
-			//lightPos.x = lightX;
-			//lightPos.z = lightZ;
-
+			angle += 60 * deltaTime;
+			float radio = 2;
+			float lightX = radio * cos(angle * DegToRad);
+			float lightZ = radio * sin(angle * DegToRad);
+			lightPos.x = lightX;
+			lightPos.z = lightZ;
 
 			for (int m = 0; m < models.size(); m++) {
 				Shader shader;
+				VerInf faceVer[3];
 				model = &models[m];
 				for (int i = 0; i < model->nfaces(); i++) {
 					for (int j = 0; j < 3; j++) {
-						shader.vertex(i, j);
+						 shader.vertex(i, j, faceVer[j]);
 					}
-					drawTriangle2D(shader.varying_tri,shader, zbuffer,gRenderer,gWindow);
+					triangle(faceVer,shader,zbuffer,gRenderer,gWindow);
+					//drawTriangle2D(shader.varying_tri,shader, zbuffer,gRenderer,gWindow);
 					//draw2DFrame(shader.varying_tri, white, gRenderer, gWindow);
 				}
 				
@@ -340,15 +310,44 @@ int main(int argc, char** argv) {
 	}
 	//Free resources and close SDL
 	close();
-
 	return 0;
 }
 
 
+void drawWindowTGA() {
+	int imageH = 256;
+	int imageW = 256;
+	int midH = imageH / 2;
+	int midW = imageW / 2;
+	int lineW = 10;
+	int halfLineW = lineW/2;
+	TGAImage frame(imageW, imageH, TGAImage::RGB);
 
+	TGAColor frameColor(100, 80, 100, 255);
+	TGAColor windowColor(0, 200, 255, 128);
+	
+	for (int i = 0; i < imageH; i++) {
+		for (int j = 0; j < imageW; j++) {
+			if ((i < lineW || i >= imageH - lineW)
+				|| (j < lineW || j >= imageW - lineW)
+				|| (i > midH - halfLineW && i <= midH + halfLineW)
+				|| (j > midW - halfLineW && j <= midW + halfLineW)) 
+			{
+				frame.set(i, j, frameColor);
+			}
+			else {
+				frame.set(i, j, windowColor);
+			}
+			
+		}
+	}
+	frame.flip_vertically(); // to place the origin in the bottom left corner of the image
+	frame.write_tga_file("alpha.tga");
+}
 
 bool init()
 {
+	//drawWindowTGA();
 	ViewMatrix= Matrix::identity();
 	ModelMatrix= Matrix::identity();
 	ProjectionMatrix= Matrix::identity();

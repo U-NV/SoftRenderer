@@ -45,6 +45,43 @@ template <typename T> struct vec<3, T> {
 
 /////////////////////////////////////////////////////////////////////////////////
 
+template <typename T> struct vec<4, T> {
+    vec() : x(T()), y(T()), z(T()), w(T()) {}
+    vec(T X, T Y, T Z, T W) : x(X), y(Y), z(Z), w(W) {}
+    template <class U> vec<4, T>(const vec<4, U>& v);
+    T& operator[](const size_t i) { 
+        assert(i < 4); 
+        switch (i) {
+            case 0:
+                return x;
+            case 1:
+                return y;
+            case 2:
+                return z;
+            case 3:
+                return w;
+        }
+        //return i <= 0 ? x : (1 == i ? y : z); 
+    }
+    const T& operator[](const size_t i) const { 
+        assert(i < 4); 
+        switch (i) {
+        case 0:
+            return x;
+        case 1:
+            return y;
+        case 2:
+            return z;
+        case 3:
+            return w;
+        }
+        //return i <= 0 ? x : (1 == i ? y : z); 
+    }
+    T x, y, z,w;
+};
+
+/////////////////////////////////////////////////////////////////////////////////
+
 template<size_t DIM, typename T> T operator*(const vec<DIM, T>& lhs, const vec<DIM, T>& rhs) {
     T ret = T();
     for (size_t i = DIM; i--; ret += lhs[i] * rhs[i]);

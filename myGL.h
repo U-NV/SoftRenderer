@@ -1,23 +1,47 @@
 #pragma once
 #ifndef __MY_GL__
 #define __MY_GL__
+
+#include "camera.h"
 #include "tgaimage.h"
 #include "myVector.h"
+
+
 #include <vector>
 #include <algorithm>
 
 #include "SDL.h"
 #include "SDL_revision.h"
 
-
 #define PI 2*acos(0.0)
 #define DegToRad PI/180.0
 #define EPSILON 1e-5
+
+
+extern Matrix ModelMatrix;
+extern Matrix ViewMatrix;
+extern Matrix ProjectionMatrix;
+extern Matrix MVP;
+
+
 //shader
+class VerInf {
+public:
+	Vec3f world_pos;
+	Vec4f clip_coord;
+	Vec3f ndc_coord;
+
+	Vec3f normal;
+	Vec2f uv;
+
+	
+	double recip_w;
+};
+
 struct IShader {
     virtual ~IShader();
-    virtual Vec4f vertex(int iface, int nthvert) = 0;
-    virtual bool fragment(Vec3f bar, TGAColor& color) = 0;
+    virtual void vertex(int iface, int nthvert, VerInf &faceVer) = 0;
+    virtual bool fragment(VerInf verInf, TGAColor& color) = 0;
 };
 
 //数学
@@ -30,6 +54,7 @@ template <typename T>
 inline T clamp(T a, T min,T max) {
     return std::min<T>(max, std::max<T>(min, a));
 }
+
 
 //template <typename T>
 //inline Vector<T> cross(const Vector<T>& a, const Vector<T>& b);
@@ -47,7 +72,7 @@ void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_
 void draw2DFrame(Vec4f* vertexBuffer, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 //void drawTriangle2D(std::vector<Vector<double>> &vertexBuffer, std::vector<Vector<int>> &colorBuffer,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
-
+void triangle(VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow);
 //模型矩阵
 Matrix translate(double x, double y, double z);
 Matrix rotate(Vec3f& axis, double theta);

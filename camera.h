@@ -4,6 +4,8 @@
 #include"myVector.h"
 #include"myGL.h"
 
+
+
 class  Camera
 {
 public:
@@ -42,5 +44,8 @@ public:
 	Matrix getViewMatrix();
 	Matrix getProjMatrix();
 };
+
+
+extern Camera defaultCamera;
 
 #endif

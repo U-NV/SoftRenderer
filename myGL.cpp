@@ -2,16 +2,10 @@
 
 IShader::~IShader() {}
 
-//template <typename T>
-//inline Vector<T> cross(Vector<T> &a, Vector<T> &b) {
-//	int len = a.len();
-//	assert(len == 3);
-//	Vector<T> temp(len);
-//	temp.x = a.y * b.z - a.z * b.y;
-//	temp.y = a.z * b.x - a.x * b.z;
-//	temp.z = a.x * b.y - a.y * b.x;
-//	return temp;
-//}
+Matrix ModelMatrix;
+Matrix ViewMatrix;
+Matrix ProjectionMatrix;
+Matrix MVP;
 
 //将坐标系原点改为左下角
 inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,TGAColor & color)
@@ -21,7 +15,6 @@ inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, in
 	SDL_GetWindowSize(gWindow, &w, &h);
 	SDL_RenderDrawPoint(gRenderer, x, h - 1 - y);
 }
-
 void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     bool steep = false;
     if (std::abs(x0 - x1) < std::abs(y0 - y1)) {
@@ -52,70 +45,41 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRe
         }
     }
 }
-
 void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     drawLine(a.x, a.y, b.x, b.y, color, gRenderer, gWindow);
 }
-
-
 void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
     drawLine(a.x, a.y, b.x, b.y, color, gRenderer, gWindow);
 }
 
+inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
+	/* 建立向量 b-a， c-a
+		由于在ndc坐标系中，实现方向为（0，0，1）
+		故cross(b-a, c-a)*(0,0,1)只会保留cross(b-a, c-a).z
+		令signed_area = cross(b-a, c-a).z 计算背面剔除
+	*/
 
-static Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
-	Vec2f ab = B - A;//  = b - a;
-	Vec2f ac = C - A;//  = c - a;
-	Vec2f ap = P - A;//  = p - a;
-
-	double factor = 1 / (ab.x * ac.y - ab.y * ac.x);
-	double s = ((double)ac.y * ap.x - (double)ac.x * ap.y) * factor;
-	double t = ((double)ab.x * ap.y - (double)ab.y * ap.x) * factor;
-
-	return Vec3f(1 - s - t, s, t);
-}
-
-static double interpolate_depth(double *screen_depths, Vec3f &weights) {
-	double depth0 = screen_depths[0] * weights.x;
-	double depth1 = screen_depths[1] * weights.y;
-	double depth2 = screen_depths[2] * weights.z;
-	return depth0 + depth1 + depth2;
-}
-
-//Vector<double> interpolate_uv(Vector<double> *uvs, Vector<double> &weights) {
-//	Vector<double> uv0 = uvs[0] * weights[0];
-//	Vector<double> uv1 = uvs[1] * weights[1];
-//	Vector<double> uv2 = uvs[2] * weights[2];
-//	return uv0 + uv1 + uv2;
-//}
-
-static bool is_back_facing(Vec3f *ndc_coords) {
-	Vec3f *a = &ndc_coords[0];
-	Vec3f *b = &ndc_coords[1];
-	Vec3f *c = &ndc_coords[2];
-
-	float signed_area = (a->x * b->y) - (a->y * b->x) +
-						(b->x * c->y) - (b->y * c->x) +
-						(c->x * a->y) - (c->y * a->x);
-
+	float signed_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 	return signed_area <= 0;
 }
-
-void draw2DFrame(Vec4f* vertexBuffer, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void draw2DFrame(VerInf* vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	int w = 0, h = 0;
 	SDL_GetWindowSize(gWindow, &w, &h);
 
 	Vec3f ndc_coords[3];
 	Vec2i screen_coords[3];
 
+
+	/* reciprocals of w */
+	for (int i = 0; i < 3; i++) {
+		vertexs[i].recip_w = 1 / vertexs[i].clip_coord[3];
+	}
 	/* perspective division */
 	for (int i = 0; i < 3; i++) {
-		Vec3f clip_coord = proj<3>(vertexBuffer[i]);
-		ndc_coords[i] = clip_coord / vertexBuffer[i][3];
+		vertexs[i].ndc_coord = proj<3>(vertexs[i].clip_coord) * vertexs[i].recip_w;
 	}
-
 	/* back-face culling */
-	if (is_back_facing(ndc_coords)) {
+	if (is_back_facing(vertexs[0].ndc_coord, vertexs[1].ndc_coord, vertexs[2].ndc_coord)) {
 		//std::cout << "back_facing" << std::endl;
 		return;
 	}
@@ -131,56 +95,145 @@ void draw2DFrame(Vec4f* vertexBuffer, TGAColor& color, SDL_Renderer* gRenderer, 
 	drawLine(screen_coords[2], screen_coords[0], color, gRenderer, gWindow);
 }
 
-void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader,double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	
-	int width = 0, height = 0;
-	SDL_GetWindowSize(gWindow, &width, &height);
+inline Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
+	Vec2f ab = B - A;//  = b - a;
+	Vec2f ac = C - A;//  = c - a;
+	Vec2f ap = P - A;//  = p - a;
 
-	Vec3f ndc_coords[3];
+	double factor = 1 / (ab.x * ac.y - ab.y * ac.x);
+	double s = ((double)ac.y * ap.x - (double)ac.x * ap.y) * factor;
+	double t = ((double)ab.x * ap.y - (double)ab.y * ap.x) * factor;
+
+	return Vec3f(1 - s - t, s, t);
+}
+
+inline double interpolate_depth(double* screen_depths, Vec3f& weights) {
+	double depth0 = screen_depths[0] * weights.x;
+	double depth1 = screen_depths[1] * weights.y;
+	double depth2 = screen_depths[2] * weights.z;
+	return depth0 + depth1 + depth2;
+}
+
+inline Vec2f interpolate(Vec2f& a,Vec2f& b,Vec2f& c, Vec3f& weights) {
+	return Vec2f(
+		a.x * weights.x + b.x * weights.y + c.x * weights.z,
+		a.y * weights.x + b.y * weights.y + c.y * weights.z
+	);
+}
+
+inline Vec3f interpolate(Vec3f& a, Vec3f& b, Vec3f& c, Vec3f& weights) {
+	return Vec3f(
+		a.x * weights.x + b.x * weights.y + c.x * weights.z,
+		a.y * weights.x + b.y * weights.y + c.y * weights.z,
+		a.z * weights.x + b.z * weights.y + c.z * weights.z
+	);
+}
+
+
+inline bool AllVertexsInside(const std::vector<Vec2f> &ver) {
+	for (int i = 0; i < 3; i++) {
+		if (ver[i].x > 1 || ver[i].x < -1)
+			return false;
+		if (ver[i].y > 1 || ver[i].y < -1)
+			return false;
+	}
+	return true;
+}
+
+inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
+	float near = defaultCamera.NEAR;
+	float far = defaultCamera.FAR;
+	if (v1[3] < near && v2[3] < near && v3[3] < near)
+		return false;
+	if (v1[3] > far && v2[3] > far && v3[3] > far)
+		return false;
+	if (fabs(v1[0]) <= fabs(v1[3]) || fabs(v1[1]) <= fabs(v1[3]) || fabs(v1[2]) <= fabs(v1[3]))
+		return true;
+	if (fabs(v2[0]) <= fabs(v2[3]) || fabs(v2[1]) <= fabs(v2[3]) || fabs(v2[2]) <= fabs(v2[3]))
+		return true;
+	if (fabs(v3[0]) <= fabs(v3[3]) || fabs(v3[1]) <= fabs(v3[3]) || fabs(v3[2]) <= fabs(v3[3]))
+		return true;
+	return false;
+}
+
+
+
+const Vec4f ViewLines[] = {
+	//Near
+	Vec4f(0,0,1,1),
+	//far
+	Vec4f(0,0,-1,1),
+	//left
+	Vec4f(1,0,0,1),
+	//top
+	Vec4f(0,1,0,1),
+	//right
+	Vec4f(-1,0,0,1),
+	//bottom 
+	Vec4f(0,-1,0,1)
+};
+bool Inside(const Vec4f& line, const Vec4f& p) {
+	return line.x * p.x + line.y * p.y + line.z * p.z + line.w * p.w >= 0;
+}
+//交点，通过端点插值
+//Vec2f Intersect(const V2F& v1, const V2F& v2, const Vec4f& line) {
+//	float da = v1.windowPos.x * line.x + v1.windowPos.y * line.y + v1.windowPos.z * line.z + line.w * v1.windowPos.w;
+//	float db = v2.windowPos.x * line.x + v2.windowPos.y * line.y + v2.windowPos.z * line.z + line.w * v2.windowPos.w;
+//
+//	float weight = da / (da - db);
+//	return V2F::lerp(v1, v2, weight);
+//}
+//std::vector<Vec2f> SutherlandHodgeman(const Vec2f& v1, const Vec2f& v2, const Vec2f& v3) {
+//	std::vector<Vec2f> output = { v1,v2,v3 };
+//	if (AllVertexsInside(output)) {
+//		return output;
+//	}
+//	for (int i = 0; i < 5; i++) {
+//		std::vector<Vec2f> input(output);
+//		output.clear();
+//		for (int j = 0; j < input.size(); j++) {
+//			Vec2f current = input[j];
+//			Vec2f last = input[(j + input.size() - 1) % input.size()];
+//			if (Inside(ViewLines[i], current.windowPos)) {
+//				if (!Inside(ViewLines[i], last.windowPos)) {
+//					V2F intersecting = Intersect(last, current, ViewLines[i]);
+//					output.push_back(intersecting);
+//				}
+//				output.push_back(current);
+//			}
+//			else if (Inside(ViewLines[i], last.windowPos)) {
+//				Vec2f intersecting = Intersect(last, current, ViewLines[i]);
+//				output.push_back(intersecting);
+//			}
+//		}
+//	}
+//	return output;
+//}
+
+
+
+int width = 0, height = 0;
+void drawTriangle2D(VerInf* verInf, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
-	double recip_w[3];
-
-	/* reciprocals of w */
-	for (int i = 0; i < 3; i++) {
-		recip_w[i] = 1 / vertexBuffer[i][3];
-	}
-
-	/* perspective division */
-	for (int i = 0; i < 3; i++) {
-		Vec3f clip_coord = proj<3>(vertexBuffer[i]);
-		ndc_coords[i] = clip_coord * recip_w[i];
-	}
-
-	/* back-face culling */
-	if (is_back_facing(ndc_coords)) {
-		//std::cout << "back_facing" << std::endl;
-		return;
-	}
-
+	
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(width, height, ndc_coords[i]);
+		Vec3f window_coord = viewport_transform(width, height, verInf[i].ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord.x, (int)window_coord.y);
 		screen_depths[i] = window_coord.z;
 	}
 
-
-	//std::cout << "clip_coords:" << vertexBuffer[0] << std::endl;
-	//std::cout << "ndc_coords:" << ndc_coords[0] <<" 1/w:"<< recip_w[0] << std::endl;
-	//std::cout << "screen_coords:" << screen_coords[0] <<" z:"<< screen_depths[0]  << std::endl;
-
-
 	Vec2i bboxmin(width - 1, height - 1);
 	Vec2i bboxmax(0, 0);
-	Vec2i clamp(width - 1, height - 1);
+	Vec2i bboxClamp(width - 1, height - 1);
 
 	for (int i = 0; i < 3; i++) {
 		bboxmin.x = std::max(0, std::min(bboxmin.x, screen_coords[i].x));
 		bboxmin.y = std::max(0, std::min(bboxmin.y, screen_coords[i].y));
 
-		bboxmax.x = std::min(clamp.x, std::max(bboxmax.x, screen_coords[i].x));
-		bboxmax.y = std::min(clamp.y, std::max(bboxmax.y, screen_coords[i].y));
+		bboxmax.x = std::min(bboxClamp.x, std::max(bboxmax.x, screen_coords[i].x));
+		bboxmax.y = std::min(bboxClamp.y, std::max(bboxmax.y, screen_coords[i].y));
 	}
 
 	Vec2i P(0, 0);
@@ -195,11 +248,17 @@ void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader,double* zbuffer, SDL_Re
 			if (weight0_okay && weight1_okay && weight2_okay) {
 				int zbufferInd = P.x + P.y * width;
 				double frag_depth = interpolate_depth(screen_depths, weights);
-				
+
 				if (frag_depth <= zbuffer[zbufferInd]) {
-					for(int i=0;i<3;i++) weights[i] = weights[i] * recip_w[i];
-					weights = weights / (weights[0]+ weights[1] + weights[2]);
-					bool discard = shader.fragment(weights, color);
+					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i].recip_w;
+					weights = weights / (weights[0] + weights[1] + weights[2]);
+					
+					VerInf temp;
+					temp.uv = interpolate(verInf[0].uv, verInf[1].uv, verInf[2].uv,weights);
+					temp.world_pos = interpolate(verInf[0].world_pos, verInf[1].world_pos, verInf[2].world_pos,weights);
+					temp.normal = interpolate(verInf[0].normal, verInf[1].normal, verInf[2].normal,weights);
+
+					bool discard = shader.fragment(temp, color);
 					//std::cout << frag_depth << " : " << frag_depth * 255 << std::endl;
 					//color = TGAColor(frag_depth * 255, frag_depth * 255, frag_depth * 255, 255);
 					if (!discard) {
@@ -213,6 +272,27 @@ void drawTriangle2D(Vec4f* vertexBuffer, IShader& shader,double* zbuffer, SDL_Re
 	}
 
 }
+
+void triangle(VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+	SDL_GetWindowSize(gWindow, &width, &height);
+
+	/* reciprocals of w */
+	for (int i = 0; i < 3; i++) {
+		vertexs[i].recip_w = 1 / vertexs[i].clip_coord[3];
+	}
+	/* perspective division */
+	for (int i = 0; i < 3; i++) {
+		vertexs[i].ndc_coord = proj<3>(vertexs[i].clip_coord) * vertexs[i].recip_w;
+	}
+	/* back-face culling */
+	if (is_back_facing(vertexs[0].ndc_coord, vertexs[1].ndc_coord, vertexs[2].ndc_coord)) {
+		//std::cout << "back_facing" << std::endl;
+		return;
+	}
+
+	drawTriangle2D(vertexs, shader, zbuffer, gRenderer, gWindow);
+}
+
 
 
 Matrix translate(double x, double y, double z) {
@@ -270,8 +350,6 @@ Matrix rotate(Vec3f &axis,double theta) {
 	return t;
 };
 
-
-
 Matrix lookat(Vec3f &eye, Vec3f& center, Vec3f& up){
 	Vec3f z = (eye - center).normalize();
 	Vec3f x = cross(up, z).normalize();
@@ -326,7 +404,6 @@ Matrix setFrustum(double fovy, double aspect, double near, double far)
 
 }
 
-
 Matrix projection(double width, double height, double zNear, double zFar) {
 	Matrix projection;
 	double r = width / 2.0;
@@ -338,7 +415,6 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	projection[3][2] = -1;
 	return projection;
 }
-
 
 static Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
 	double x = double((double)ndc_coord.x + 1.0f) * 0.5f * (double)width;   /* [-1, 1] -> [0, w] */
