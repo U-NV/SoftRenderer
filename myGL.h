@@ -23,7 +23,6 @@ inline T lerp(T a, T b, double rate) {
 	return a + (b - a) * rate;
 }
 
-
 template <typename T>
 inline T clamp(T a, T min, T max) {
 	return std::min<T>(max, std::max<T>(min, a));

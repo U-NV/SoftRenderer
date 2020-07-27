@@ -158,36 +158,41 @@ inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) 
 inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
 	float near = defaultCamera.NEAR;
 	float far = defaultCamera.FAR;
-	if (v1[3] < near && v2[3] < near && v3[3] < near)
+	if (v1.w < near && v2.w < near && v3.w < near)
 		return false;
-	if (v1[3] > far && v2[3] > far && v3[3] > far)
+	if (v1.w > far && v2.w > far && v3.w > far)
 		return false;
-	if (fabs(v1[0]) <= fabs(v1[3]) || fabs(v1[1]) <= fabs(v1[3]) || fabs(v1[2]) <= fabs(v1[3]))
+
+	if (fabs(v1[0]) <= fabs(v1.w) || fabs(v1[1]) <= fabs(v1.w) || fabs(v1[2]) <= fabs(v1.w))
 		return true;
-	if (fabs(v2[0]) <= fabs(v2[3]) || fabs(v2[1]) <= fabs(v2[3]) || fabs(v2[2]) <= fabs(v2[3]))
+	if (fabs(v2[0]) <= fabs(v2.w) || fabs(v2[1]) <= fabs(v2.w) || fabs(v2[2]) <= fabs(v2.w))
 		return true;
-	if (fabs(v3[0]) <= fabs(v3[3]) || fabs(v3[1]) <= fabs(v3[3]) || fabs(v3[2]) <= fabs(v3[3]))
+	if (fabs(v3[0]) <= fabs(v3.w) || fabs(v3[1]) <= fabs(v3.w) || fabs(v3[2]) <= fabs(v3.w))
 		return true;
 	return false;
 }
 
-// Ax + By + C < 0 就在内侧
+// Ax + By + Cz + D > 0 就与法向量同侧
 const Vec4f ViewLines[] = {
+	//left
+	Vec4f(-1,0,0,1),
+	//right
+	Vec4f(1,0,0,1),
+
+	//top
+	Vec4f(0,1,0,1),
+	//bottom 
+	Vec4f(0,-1,0,1),
+
 	//Near
 	Vec4f(0,0,1,1),
 	//far
 	Vec4f(0,0,-1,1),
-	//left
-	Vec4f(1,0,0,1),
-	//top
-	Vec4f(0,1,0,1),
-	//right
-	Vec4f(-1,0,0,1),
-	//bottom 
-	Vec4f(0,-1,0,1)
 };
 inline bool Inside(const Vec4f& line, const Vec4f& p) {
-	return line.x * p.x + line.y * p.y + line.z * p.z + line.w * p.w >= 0;
+	/*float rw = 1 / p.w;
+	return (line.x * p.x * rw + line.y * p.y * rw + line.z * p.z * rw + line.w) > 0;*/
+	return (line.x * p.x + line.y * p.y + line.z * p.z + line.w * p.w) >= 0;
 }
 inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
 	float da = v1.clip_coord.x * line.x + v1.clip_coord.y * line.y + v1.clip_coord.z * line.z + line.w * v1.clip_coord.w;
@@ -201,7 +206,7 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord)) {
 		return output;
 	}
-	for (int i = 0; i <5; i++) {
+	for (int i = 0; i <6; i++) {
 		std::vector<VerInf> input(output);
 		output.clear();
 		for (int j = 0; j < input.size(); j++) {
@@ -277,9 +282,17 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 					if (!discard) {
 						//更新zbuffer
 						zbuffer[zbufferInd] = frag_depth;
+						float fogRange = 0.04;
+						float fogStartPos = 1 - fogRange;
+						float rate = (frag_depth - fogStartPos) / fogRange;
+						rate = clamp(rate, 0.0f, 1.0f);
+
+						TGAColor deothColor(100, 30, 0x00, rate * 255);
 						//进行alpha混合
 						TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
 						color = blendColor(color, colorNow);
+						color = blendColor(deothColor, color);
+						
 						//写入绘制buffer
 						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
 					}
@@ -294,7 +307,7 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord)) {
 		return;
 	}
-	
+
 	VerInf *verList[3];
 	std::vector<VerInf> clipingVertexs = SutherlandHodgeman(vertexs[0], vertexs[1], vertexs[2]);
 

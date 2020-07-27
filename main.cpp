@@ -9,7 +9,7 @@
 #include "SDLWindow.h"
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 400;
+const int SCREEN_WIDTH = 600;
 const int SCREEN_HEIGHT = 400;
 
 //MVP矩阵相关参数
@@ -44,14 +44,12 @@ struct Shader : public IShader {
 		Vec3f normal = model->normal(uv); 
 
 		//Vec3f bn = (varying_nrm * weights).normalize();
-
 		//mat<3, 3, float> A;
 		//A[0] = ndc_tri.col(1) - ndc_tri.col(0);
 		//A[1] = ndc_tri.col(2) - ndc_tri.col(0);
 		//A[2] = bn;
 
 		//mat<3, 3, float> AI = A.invert();
-
 		//Vec3f i = AI * Vec3f(varying_uv[0][1] - varying_uv[0][0], varying_uv[0][2] - varying_uv[0][0], 0);
 		//Vec3f j = AI * Vec3f(varying_uv[1][1] - varying_uv[1][0], varying_uv[1][2] - varying_uv[1][0], 0);
 
@@ -64,7 +62,7 @@ struct Shader : public IShader {
 
 		//设置光照
 		float ambient = 0.0f;
-		float lightPower = 1.5;
+		float lightPower = 2;
 
 		Vec3f vertPos = verInf.world_pos;
 		Vec3f lightDir = (lightPos - vertPos);
@@ -77,12 +75,11 @@ struct Shader : public IShader {
 
 		float diff = clamp<float>(std::abs(lightDir * normal), 0, 1);
 		float spec = clamp<float>(std::abs(normal * hafe), 0, 1);
-		float uvspecular = clamp<float>((float)model->specular(uv)/100.0f, 0, 1);
 
 		TGAColor c = model->diffuse(uv);
 		color = c;
 		for (int i = 0; i < 3; i++) {
-			float rate = clamp<float>(ambient + (1 * diff + 1 * spec + 1*uvspecular)/dis / dis * lightPower,0,10);
+			float rate = clamp<float>(ambient + (1 * diff + 1 * spec)/dis / dis * lightPower,0,10);
 			color[i] = clamp<int>((float)c[i] * rate,0,255);
 		}
 
@@ -120,7 +117,7 @@ int main(int argc, char** argv) {
 		}
 
 		//创建相机
-		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT,0.1,100,60);
+		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.3, 3, 60);
 
 		//初始化MVP矩阵
 		ViewMatrix = Matrix::identity();
@@ -153,7 +150,7 @@ int main(int argc, char** argv) {
 			KMH.getMouseKeyEven(NULL, deltaTime);
 
 			//清空drawbuffer和zbuffer，绘制新的画面
-			ColorVec backGroundColor(0x00, 0x00, 0x00, 0xFF);
+			ColorVec backGroundColor(100, 30, 0x00, 0xFF);
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 			std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, backGroundColor);
 
@@ -165,12 +162,12 @@ int main(int argc, char** argv) {
 			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
 			//光源旋转
-			angle += 60 * deltaTime;
-			float radio = 2;
-			float lightX = radio * cos(angle * DegToRad);
-			float lightZ = radio * sin(angle * DegToRad);
-			lightPos.x = lightX;
-			lightPos.z = lightZ;
+			//angle += 60 * deltaTime;
+			//float radio = 2;
+			//float lightX = radio * cos(angle * DegToRad);
+			//float lightZ = radio * sin(angle * DegToRad);
+			//lightPos.x = lightX;
+			//lightPos.z = lightZ;
 
 			//绘制模型的三角面片
 			for (int m = 0; m < models.size(); m++) {
@@ -191,7 +188,7 @@ int main(int argc, char** argv) {
 			drawBuffer = showBuffer;
 			showBuffer = temp;
 
-			//将缓存显示到屏幕上
+			//将缓存内容赋值给屏幕
 			for (int x = 0; x < SCREEN_WIDTH; x++) {
 				for (int y = 0; y < SCREEN_HEIGHT; y++) {
 					window.drawPixel(x, y, SCREEN_WIDTH, SCREEN_HEIGHT, showBuffer);
