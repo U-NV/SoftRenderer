@@ -30,6 +30,12 @@
     <ClInclude Include="camera.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="KeyboardAndMouseHandle.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="SDLWindow.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -48,6 +54,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="camera.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="KeyboardAndMouseHandle.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="SDLWindow.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -1,155 +1,27 @@
-#include "myGL.h"
-#include "model.h"
-
 #include <vector>
 #include <limits>
 #include <cmath>
 #include <iostream>
-
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <time.h>
-
-
-bool SDL_Runing = false;
+#include "myGL.h"
+#include "model.h"
+#include "KeyboardAndMouseHandle.h"
+#include "SDLWindow.h"
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 400;
 const int SCREEN_HEIGHT = 400;
 
-//Starts up SDL and creates window
-bool init();
-
-//Frees media and shuts down SDL
-void close();
-
-//The window we'll be rendering to
-SDL_Window* gWindow = NULL;
-
-SDL_Texture* gTexture = NULL;
-
-//The window renderer
-SDL_Renderer* gRenderer = NULL;
+//MVP矩阵相关参数
+Vec3f up(0, 1, 0);
+Vec3f right(1, 0, 0);
+Vec3f forword(0, 0, 1);
 
 Model* model;
-
 Vec3f lightPos(1, 0.5,1);
 
 clock_t lastFrame = 0;
 float deltaTime = 0;
-
-bool keysEvent[1024] = {false};
-bool mouseEvent[2] = {false};
-bool rightKeyPress = false;
-bool leftKeyPress = false;
-int mouseWheelAmount = 0;
-Vec2f MousePosNow(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-Vec2f MousePosPre(SCREEN_WIDTH/2, SCREEN_HEIGHT/2);
-inline void handlerKeyboardEvent() {
-	float cameraSpeed = 2.0f * deltaTime;
-	if (keysEvent[SDLK_ESCAPE]) {
-		SDL_Runing = false;
-	}
-	if (keysEvent[SDLK_w]) {
-		defaultCamera.moveStraight(cameraSpeed);
-	}
-	if (keysEvent[SDLK_s]) {
-		defaultCamera.moveStraight(-cameraSpeed);
-	}
-	if (keysEvent[SDLK_a]) {
-		defaultCamera.moveTransverse(-cameraSpeed);
-	}
-	if (keysEvent[SDLK_d]) {
-		defaultCamera.moveTransverse(cameraSpeed);
-	}
-	if (keysEvent[SDLK_e]) {
-		defaultCamera.moveVertical(cameraSpeed);
-	}
-	if (keysEvent[SDLK_q]) {
-		defaultCamera.moveVertical(-cameraSpeed);
-	}
-
-	if (rightKeyPress || leftKeyPress) {
-		Vec2f offset = MousePosNow - MousePosPre;
-		MousePosPre = MousePosNow;
-
-		double sensitivity = 10;
-		offset.x *= sensitivity;
-		offset.y *= sensitivity;
-
-		if (rightKeyPress) {
-			defaultCamera.rotateCamera(offset * deltaTime);
-		}
-		if (leftKeyPress) {
-			
-		}
-	}
-
-	if (mouseWheelAmount != 0) {
-		defaultCamera.changeFov(- mouseWheelAmount  * cameraSpeed);
-		mouseWheelAmount = 0;
-	}
-}
-int getMouseKeyEven(void* opaque) {
-	SDL_Event event;
-	while (SDL_PollEvent(&event))
-	{
-		switch (event.type) {
-			case SDL_KEYDOWN:
-				if(event.key.keysym.sym < 1024)
-					keysEvent[event.key.keysym.sym] = true;
-				break;
-			case SDL_KEYUP:
-				if(event.key.keysym.sym < 1024)
-					keysEvent[event.key.keysym.sym] = false;
-				break;
-			case SDL_MOUSEMOTION:
-				MousePosNow.x = event.motion.x;
-				MousePosNow.y = SCREEN_HEIGHT - event.motion.y;
-				//printf("x, y %d %d ...............\n", MousePosNow.x, MousePosNow.y);
-				break;
-			case SDL_MOUSEWHEEL:
-				mouseWheelAmount = event.wheel.y;
-				break;
-			case SDL_MOUSEBUTTONDOWN:
-				switch (event.button.button)
-				{
-					case SDL_BUTTON_LEFT:
-						leftKeyPress = true;
-						break;
-					case SDL_BUTTON_RIGHT:
-						MousePosPre = MousePosNow;
-						rightKeyPress = true;
-						break;
-					default:
-						break;
-				}
-				break;
-			case SDL_MOUSEBUTTONUP:
-				switch (event.button.button)
-				{
-					case SDL_BUTTON_LEFT:
-						leftKeyPress = false;
-						break;
-					case SDL_BUTTON_RIGHT:
-						rightKeyPress = false;
-						break;
-					default:
-						break;
-				}
-				break;
-			case SDL_QUIT:
-				SDL_Runing = false;
-				break;
-			default:
-				break;
-		}
-	}
-
-	handlerKeyboardEvent();
-	return 0;
-}
 
 struct Shader : public IShader {
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
@@ -217,15 +89,20 @@ struct Shader : public IShader {
 		return false;
 	}
 };
+
 int main(int argc, char** argv) {
-	if (!init())
+	//创建视窗
+	SDLWindow window(SCREEN_WIDTH, SCREEN_HEIGHT);
+	//监听键鼠事件
+	KeyboardAndMouseHandle KMH(SCREEN_WIDTH, SCREEN_HEIGHT);
+	if (!window.initSuccess)
 	{
 		printf("Failed to initialize!\n");
 	}
 	else
 	{
 		//Main loop flag
-		SDL_Runing = true;
+		KMH.SDL_Runing = true;
 
 		//模型信息
 		std::vector<std::string> modleName = {
@@ -236,62 +113,58 @@ int main(int argc, char** argv) {
 			"obj/window.obj",
 		};
 
+		//载入需要渲染的模型
 		std::vector<Model> models;
 		for (int m = 0; m < modleName.size(); m++) {
 			models.push_back(Model(modleName[m]));
 		}
+
 		//创建相机
 		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT,0.1,100,60);
 
-		//MVP矩阵相关参数
-		Vec3f objPos(0, 0, 0);
-		Vec3f up(0, 1, 0);
-		Vec3f right(1, 0, 0);
-		Vec3f forword(0, 0, 1);
+		//初始化MVP矩阵
+		ViewMatrix = Matrix::identity();
+		ModelMatrix = Matrix::identity();
+		ProjectionMatrix = Matrix::identity();
 
-		//zbuffer
+		//双缓存 和 zbuffer
 		double* zbuffer = new double[SCREEN_HEIGHT * SCREEN_WIDTH];
+		ColorVec* drawBuffer = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
+		ColorVec* showBuffer = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
+		ColorVec* temp = NULL;
 
 		//帧计数器
 		int timer = 0;
 		float angle = 0;
+
 		//While application is running
-		while (SDL_Runing){
+		while (KMH.SDL_Runing){
+			//计算deltaTime与fps
 			timer++;
-			
-			//Handle events on queue
-			getMouseKeyEven(NULL);
-
-			//Clear screen
-		/*	SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
-			SDL_RenderClear(gRenderer);*/
-			
-			SDL_SetRenderTarget(gRenderer, gTexture);
-			SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
-			SDL_RenderClear(gRenderer);
-
-
-			//get delta time
 			clock_t currentFrame = clock();
 			deltaTime = float((float)currentFrame - lastFrame)/ CLOCKS_PER_SEC;
 			lastFrame = currentFrame;
-
 			if (timer >= 1 / deltaTime) {
 				std::cout << "Current Frames Per Second:" << 1 / deltaTime << std::endl;
 				timer = 0;
 			}
-
-			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 			
+			//处理键鼠事件
+			KMH.getMouseKeyEven(NULL, deltaTime);
+
+			//清空drawbuffer和zbuffer，绘制新的画面
+			ColorVec backGroundColor(0x00, 0x00, 0x00, 0xFF);
+			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
+			std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, backGroundColor);
+
+			//计算MVP矩阵
 			//首先执行缩放，接着旋转，最后才是平移
-			//translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
-			//ModelMatrix = rotate(up, timer);
-			//std::cout << ModelMatrix <<std::endl;
-			//ModelMatrix= Matrix::identity();
+			//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
 			ViewMatrix = defaultCamera.getViewMatrix();
 			ProjectionMatrix = defaultCamera.getProjMatrix();
 			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
+			//光源旋转
 			angle += 60 * deltaTime;
 			float radio = 2;
 			float lightX = radio * cos(angle * DegToRad);
@@ -299,6 +172,7 @@ int main(int argc, char** argv) {
 			lightPos.x = lightX;
 			lightPos.z = lightZ;
 
+			//绘制模型的三角面片
 			for (int m = 0; m < models.size(); m++) {
 				Shader shader;
 				VerInf faceVer[3];
@@ -307,25 +181,35 @@ int main(int argc, char** argv) {
 					for (int j = 0; j < 3; j++) {
 						 shader.vertex(i, j, faceVer[j]);
 					}
-					triangle(false,faceVer,shader,zbuffer,gRenderer,gWindow);
-					//triangle(true,faceVer,shader,zbuffer,gRenderer,gWindow);
+					triangle(false,faceVer,shader, SCREEN_WIDTH, SCREEN_HEIGHT,zbuffer,drawBuffer);
+					//triangle(true,faceVer,shader, SCREEN_WIDTH, SCREEN_HEIGHT, zbuffer, drawBuffer);
 				}
-				
 			}
-			//Update screen
-			//SDL_RenderPresent(gRenderer);
 
-			SDL_SetRenderTarget(gRenderer, NULL);
-			SDL_RenderCopy(gRenderer,gTexture, NULL, NULL);
-			SDL_RenderPresent(gRenderer);
+			//交换缓存
+			temp = drawBuffer;
+			drawBuffer = showBuffer;
+			showBuffer = temp;
+
+			//将缓存显示到屏幕上
+			for (int x = 0; x < SCREEN_WIDTH; x++) {
+				for (int y = 0; y < SCREEN_HEIGHT; y++) {
+					window.drawPixel(x, y, SCREEN_WIDTH, SCREEN_HEIGHT, showBuffer);
+				}
+			}
+
+			//更新屏幕显示内容
+			window.refresh();
+			
 		}
 		delete[] zbuffer;
+		delete[] showBuffer;
+		delete[] drawBuffer;
 	}
 	//Free resources and close SDL
-	close();
+	window.close();
 	return 0;
 }
-
 
 void drawWindowTGA() {
 	int imageH = 256;
@@ -358,68 +242,4 @@ void drawWindowTGA() {
 	frame.write_tga_file("window_diffuse.tga");
 }
 
-bool init()
-{
-	//drawWindowTGA();
-	ViewMatrix= Matrix::identity();
-	ModelMatrix= Matrix::identity();
-	ProjectionMatrix= Matrix::identity();
 
-	//Initialization flag
-	bool success = true;
-
-	
-
-	//Initialize SDL
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
-	{
-		printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
-		success = false;
-	}
-	else
-	{
-		//Set texture filtering to linear
-		if (!SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1"))
-		{
-			printf("Warning: Linear texture filtering not enabled!");
-		}
-
-		//Create window
-		gWindow = SDL_CreateWindow("SoftRenderer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-		if (gWindow == NULL)
-		{
-			printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
-			success = false;
-		}
-		else
-		{
-			//Create renderer for window
-			//gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
-			gRenderer = SDL_CreateRenderer(gWindow, -1, 0);
-			if (gRenderer == NULL)
-			{
-				printf("Renderer could not be created! SDL Error: %s\n", SDL_GetError());
-				success = false;
-			}
-
-
-			gTexture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
-			SDL_SetTextureBlendMode(gTexture, SDL_BLENDMODE_BLEND);
-			SDL_SetRenderDrawBlendMode(gRenderer, SDL_BLENDMODE_BLEND);
-		}
-	}
-	return success;
-}
-
-void close()
-{
-	//Destroy window    
-	SDL_DestroyRenderer(gRenderer);
-	SDL_DestroyWindow(gWindow); 
-	SDL_DestroyTexture(gTexture);
-	gWindow = NULL;
-	gRenderer = NULL;
-	gTexture = NULL;
-	//Quit SDL subsystems
-	SDL_Quit();
-}

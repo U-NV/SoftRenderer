@@ -19,12 +19,10 @@ Camera::Camera(float screenAspect,float near = 0.1f,float far = 20,float fovy = 
 	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
 	setViewMatrix();
 }
-	
 
 Camera::~Camera()
 {
 }
-
 
 
 void Camera::moveStraight(float amount)

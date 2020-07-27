@@ -149,17 +149,21 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="camera.h" />
+    <ClInclude Include="KeyboardAndMouseHandle.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="myGL.h" />
     <ClInclude Include="myVector.h" />
+    <ClInclude Include="SDLWindow.h" />
     <ClInclude Include="tgaimage.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="KeyboardAndMouseHandle.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="myGL.cpp" />
     <ClCompile Include="myVector.cpp" />
+    <ClCompile Include="SDLWindow.cpp" />
     <ClCompile Include="tgaimage.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

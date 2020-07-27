@@ -7,12 +7,10 @@ Matrix ViewMatrix;
 Matrix ProjectionMatrix;
 Matrix MVP;
 
-int width = 0, height = 0;
-
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
 
-VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
+inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
 {
 	VerInf result;
 	result.clip_coord = lerp(v1.clip_coord, v2.clip_coord, factor);
@@ -24,31 +22,29 @@ VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
 	return result;
 }
 
-//将坐标系原点改为左下角
-inline void SDLDrawPixel(SDL_Renderer* gRenderer, SDL_Window* gWindow, int x, int y,TGAColor & color)
-{
-	SDL_SetRenderDrawColor(gRenderer, color[2], color[1], color[0], color[3]);
-	SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
-}
-
-Uint32 getpixel(SDL_Surface* surface, int x, int y)
-{
-	y = height - 1 - y;
-	int bpp = surface->format->BytesPerPixel;
-	/* Here p is the address to the pixel we want to retrieve */
-	Uint32* p = (Uint32*)surface->pixels + y * surface->pitch + x * bpp;
-	return *p;
+inline void setPixelBuffer(int& x, int& y, int& width, int& height, TGAColor& color, ColorVec* drawBuffer) {
+	int bufferInd = x + y * width;
+	drawBuffer[bufferInd].x = color[2];
+	drawBuffer[bufferInd].y = color[1];
+	drawBuffer[bufferInd].z = color[0];
+	drawBuffer[bufferInd].w = color[3];
 }
 
 inline TGAColor blendColor(TGAColor& newColor, TGAColor& oldColor) {
-	TGAColor result;
 	float alpha = newColor[3] / 255.0f;
-	result = newColor * alpha + oldColor * (1 - alpha);
-	return result;
+	newColor = newColor * alpha + oldColor * (1 - alpha);
+	return newColor;
 }
 
-void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-    bool steep = false;
+void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+	x0 = clamp(x0, 0, width-1);
+	x1 = clamp(x1, 0, width-1);
+
+	y0 = clamp(y0, 0, height-1);
+	y1 = clamp(y1, 0, height-1);
+	
+	
+	bool steep = false;
     if (std::abs(x0 - x1) < std::abs(y0 - y1)) {
         std::swap(x0, y0);
         std::swap(x1, y1);
@@ -65,10 +61,12 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRe
     int y = y0;
     for (int x = x0; x <= x1; x++) {
         if (steep) {
-			SDLDrawPixel(gRenderer, gWindow, y, x, color);
+			setPixelBuffer(y, x, width, height, color, drawBuffer);
+			//SDLDrawPixel(gRenderer, gWindow, y, x, color);
         }
         else {
-			SDLDrawPixel(gRenderer, gWindow, x, y, color);
+			setPixelBuffer(x, y, width, height, color, drawBuffer);
+			//SDLDrawPixel(gRenderer, gWindow, x, y, color);
         }
         error2 += derror2;
         if (error2 > dx) {
@@ -77,11 +75,11 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, SDL_Renderer* gRe
         }
     }
 }
-void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-    drawLine(a.x, a.y, b.x, b.y, color, gRenderer, gWindow);
+void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+    drawLine(a.x, a.y, b.x, b.y, color, width,height, drawBuffer);
 }
-void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-    drawLine(a.x, a.y, b.x, b.y, color, gRenderer, gWindow);
+void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+	drawLine(a.x, a.y, b.x, b.y, color, width, height, drawBuffer);
 }
 
 inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
@@ -94,7 +92,7 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	float signed_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 	return signed_area <= 0;
 }
-void draw2DFrame(VerInf** vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void draw2DFrame(VerInf** vertexs, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
 	Vec2i screen_coords[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
@@ -102,9 +100,9 @@ void draw2DFrame(VerInf** vertexs, TGAColor& color, SDL_Renderer* gRenderer, SDL
 		screen_coords[i] = Vec2i((int)window_coord[0], (int)window_coord[1]);
 	}
 
-	drawLine(screen_coords[0], screen_coords[1], color, gRenderer, gWindow);
-	drawLine(screen_coords[1], screen_coords[2], color, gRenderer, gWindow);
-	drawLine(screen_coords[2], screen_coords[0], color, gRenderer, gWindow);
+	drawLine(screen_coords[0], screen_coords[1], color, width, height, drawBuffer);
+	drawLine(screen_coords[1], screen_coords[2], color, width, height, drawBuffer);
+	drawLine(screen_coords[2], screen_coords[0], color, width, height, drawBuffer);
 }
 
 inline Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
@@ -203,7 +201,7 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord)) {
 		return output;
 	}
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i <5; i++) {
 		std::vector<VerInf> input(output);
 		output.clear();
 		for (int j = 0; j < input.size(); j++) {
@@ -225,7 +223,7 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 	return output;
 }
 
-void drawTriangle2D(VerInf** verInf, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
+void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, double* zbuffer, ColorVec* drawBuffer) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
 	
@@ -262,28 +260,28 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, double* zbuffer, SDL_Rende
 				double frag_depth = interpolate_depth(screen_depths, weights);
 
 				if (frag_depth <= zbuffer[zbufferInd]) {
+					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
 					weights = weights / (weights[0] + weights[1] + weights[2]);
 					
+					//为面元着色器准备参数
 					VerInf temp;
 					temp.uv = interpolate(verInf[0]->uv, verInf[1]->uv, verInf[2]->uv,weights);
 					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos,weights);
 					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal,weights);
 
+					//调用面元着色器
 					bool discard = shader.fragment(temp, color);
 					//std::cout << frag_depth << " : " << frag_depth * 255 << std::endl;
 					//color = TGAColor(frag_depth * 255, frag_depth * 255, frag_depth * 255, 255);
 					if (!discard) {
+						//更新zbuffer
 						zbuffer[zbufferInd] = frag_depth;
-						//TGAColor colorNow;
-						//SDL_Surface* gSurface = SDL_GetWindowSurface(gWindow);
-
-						//Uint32 data = getpixel(gSurface, P[0], P[1]);
-						//SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
-						//SDL_GetRGBA(data, format, &colorNow[2], &colorNow[1], &colorNow[0], &colorNow[3]);
-						////std::cout << colorNow[2] <<"-"<< colorNow[1] << "-" << colorNow[0] << "-" << colorNow[3] << std :: endl;
-						//color = blendColor(color, colorNow);
-						SDLDrawPixel(gRenderer, gWindow, P[0], P[1], color);
+						//进行alpha混合
+						TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+						color = blendColor(color, colorNow);
+						//写入绘制buffer
+						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
 					}
 				}
 			}
@@ -292,9 +290,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, double* zbuffer, SDL_Rende
 	}
 }
 
-void triangle(bool farme,VerInf* vertexs, IShader& shader, double* zbuffer, SDL_Renderer* gRenderer, SDL_Window* gWindow) {
-	SDL_GetWindowSize(gWindow, &width, &height);
-
+void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height, double* zbuffer, ColorVec* drawBuffer) {
 	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord)) {
 		return;
 	}
@@ -320,9 +316,9 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, double* zbuffer, SDL_
 			return;
 		}
 		if (farme)
-			draw2DFrame(verList, white, gRenderer, gWindow);
+			draw2DFrame(verList, white, width,height,drawBuffer);
 		else
-			drawTriangle2D(verList, shader, zbuffer, gRenderer, gWindow);
+			drawTriangle2D(verList, shader,  width, height, zbuffer, drawBuffer);
 	}
 
 }
