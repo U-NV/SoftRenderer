@@ -212,7 +212,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 }
 
 void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer) {
-	//清空drawbuffer、zbuffer、shadowBuffer，绘制新的画面
+	//清空drawbuffer和zbuffer，绘制新的画面
 	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, backGroundColor);
 
@@ -349,6 +349,7 @@ int main(int argc, char** argv) {
 	}
 	//Free resources and close SDL
 	window.close();
+	//shadow.close();
 	return 0;
 }
 
