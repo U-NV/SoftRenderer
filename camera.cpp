@@ -24,8 +24,11 @@ Camera::Camera(float screenAspect,float near = 0.1f,float far = 20,float fovy = 
 	FAR = far;
 	FOVY = fovy;
 	aspect = screenAspect;
-	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
-	//ProjectionMatrix = mat4_orthographic(6,4,near, far);
+	ProjectionMode = true;
+	if(ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6,4, NEAR, FAR);
 	setViewMatrix();
 }
 
@@ -56,13 +59,19 @@ void Camera::changeFov(float amount)
 {
 	FOVY += amount;
 	FOVY = std::max(0.0f, std::min(90.0f, FOVY));
-	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	if (ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }
 
 void Camera::setFov(float Fov)
 {
 	FOVY = Fov;
-	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	if (ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }
 
 Vec3f Camera::getPos()
@@ -77,6 +86,15 @@ float Camera::getNear() {
 float Camera::getFar()
 {
 	return FAR;
+}
+
+void Camera::enableProjectMode(bool flag)
+{
+	ProjectionMode = flag;
+	if (ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }
 
 void Camera::rotateCamera(Vec2f offset)

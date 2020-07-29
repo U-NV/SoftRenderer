@@ -14,6 +14,14 @@ bool enableFrontFaceCulling;
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
 
+float LinearizeDepth(float depth)
+{
+	float near_plane = defaultCamera.getNear();
+	float far_plane = defaultCamera.getFar();
+	float z = depth * 2.0 - 1.0; // Back to NDC 
+	return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+}
+
 inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
 {
 	VerInf result;
@@ -268,8 +276,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 			int weight2_okay = weights.z > -EPSILON;
 			if (weight0_okay && weight1_okay && weight2_okay) {
 				int zbufferInd = P.x + P.y * width;
-				double frag_depth = LinearizeDepth(interpolate_depth(screen_depths, weights));
-				//double frag_depth = interpolate_depth(screen_depths, weights);
+				double frag_depth = interpolate_depth(screen_depths, weights);
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
@@ -277,8 +284,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 					
 					//为面元着色器准备参数
 					temp.uv = interpolate(verInf[0]->uv, verInf[1]->uv, verInf[2]->uv,weights);
-					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos,weights);
-					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal,weights);
+					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos, weights);
+					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal, weights);
 					//temp.ndc_coord = interpolate(verInf[0]->ndc_coord, verInf[1]->ndc_coord, verInf[2]->ndc_coord,weights);
 					temp.depth = frag_depth;
 
@@ -287,17 +294,17 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 					if (!discard) {
 						//更新zbuffer
 						zbuffer[zbufferInd] = frag_depth;
-						float fogRange = 0.3;
-						float fogStartPos = 1 - fogRange;
-						float rate = (frag_depth - fogStartPos) / fogRange;
-						rate = clamp(rate, 0.0f, 1.0f);
+						//float fogRange = 0.3;
+						//float fogStartPos = 1 - fogRange;
+						//float rate = (frag_depth - fogStartPos) / fogRange;
+						//rate = clamp(rate, 0.0f, 1.0f);
 
-						TGAColor deothColor(100, 30, 0x00, rate * 255);
-						//进行alpha混合
-						TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
-						color = blendColor(color, colorNow);
-						color = blendColor(deothColor, color);
-						
+						//TGAColor deothColor(100, 30, 0x00, rate * 255);
+						////进行alpha混合
+						//TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+						//color = blendColor(color, colorNow);
+						//color = blendColor(deothColor, color);
+						//
 						//写入绘制buffer
 						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
 					}
@@ -328,9 +335,7 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 		verList[1] = &clipingVertexs[i + 1];
 		verList[2] = &clipingVertexs[i + 2];
 
-		/* back-face culling */
 		if (enableFaceCulling && is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
-			//std::cout << "back_facing" << std::endl;
 			return;
 		}
 		if (farme)
@@ -477,13 +482,7 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 }
 
 
-inline float LinearizeDepth(float depth)
-{
-	float near_plane = defaultCamera.getNear();
-	float far_plane = defaultCamera.getFar();
-	float z = depth * 2.0 - 1.0; // Back to NDC 
-	return ((2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane)))/ far_plane;
-}
+
 
 
 Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {

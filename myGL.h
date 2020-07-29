@@ -74,7 +74,7 @@ Matrix projection(double width, double height, double zNear, double zFar);
 Matrix setFrustum(double fovY, double aspectRatio, double front, double back);
 Matrix mat4_orthographic(float right, float top, float near, float far);
 
-inline float LinearizeDepth(float depth);
+float LinearizeDepth(float depth);
 
 // ”¥∞±‰ªª
 Vec3f viewport_transform(int width, int height, Vec3f ndc_coord);

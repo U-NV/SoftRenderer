@@ -21,9 +21,12 @@ private:
 	Vec3f camTargetPos = { 0, 0, -1 };
 	//Vec3f targetPos = { 0, 0, 0 };
 
+	
+
 	Matrix ViewMatrix;
 	Matrix ProjectionMatrix;
 public:
+	bool ProjectionMode = true;
 	Camera();
 	Camera(float screenAspect, float near, float far, float fovy);
 	~ Camera();
@@ -42,6 +45,8 @@ public:
 	Vec3f getPos();
 	float getNear();
 	float getFar();
+
+	void enableProjectMode(bool flag);
 
 	Matrix getViewMatrix();
 	Matrix getProjMatrix();

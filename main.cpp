@@ -17,15 +17,19 @@ const int SHADOW_WIDTH = 1000, SHADOW_HEIGHT = 1000;
 Vec3f up(0, 1, 0);
 Vec3f right(1, 0, 0);
 Vec3f forword(0, 0, 1);
-Vec3f center(0, -1, 0);
+Vec3f center(0, 0, 0);
 Vec3f camDefaultPos(0, 0, 1);
 
 //颜色
 ColorVec backGroundColor(100, 30, 0x00, 0xFF);
 ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 
+//光源位置
+Vec3f lightPos(1, 1, 1);
+
+
 Model* model;
-Vec3f lightPos(2, 2,2);
+
 
 clock_t lastFrame = 0;
 float deltaTime = 0;
@@ -41,7 +45,7 @@ struct Shader : public IShader {
 		//获得模型uv
 		faceVer.uv = model->uv(iface, nthvert);
 		//法线变换
-		faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(model->normal(iface, nthvert), 0.f));
+		faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(model->normal(iface, nthvert), 0.0));
 		//世界坐标
 		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(model->vert(iface, nthvert)));
 		//裁切坐标
@@ -52,20 +56,30 @@ struct Shader : public IShader {
 		//计算顶点在光照坐标系的坐标
 		Vec4f clipPosLightSpace = *LightSpaceMatrix * embed<4>(world_pos);
 		//进行透视除法
+		clipPosLightSpace.w = std::max(0.000000001, clipPosLightSpace.w);
 		float light_recip_w = 1 / clipPosLightSpace.w;
 		Vec3f ndcLightSpace = proj<3>(clipPosLightSpace * light_recip_w);
 		//因为没有进行各种裁切，故这里进行clamp，防止数据溢出
-		ndcLightSpace.x = clamp(ndcLightSpace.x, -1.0f, 1.0f);
-		ndcLightSpace.y = clamp(ndcLightSpace.y, -1.0f, 1.0f);
-		ndcLightSpace.z = clamp(ndcLightSpace.z, -1.0f, 1.0f);
+		ndcLightSpace.x = clamp(ndcLightSpace.x, -1.0, 1.0);
+		ndcLightSpace.y = clamp(ndcLightSpace.y, -1.0, 1.0);
+		ndcLightSpace.z = clamp(ndcLightSpace.z, -1.0, 1.0);
 		//变换到阴影贴图的范围
 		Vec3f shadowTextureCoords = viewport_transform(SHADOW_WIDTH, SHADOW_HEIGHT, ndcLightSpace);
 		//从缓存中得到最近的深度
 		float closestDepth = ShadowBuffer[(int)shadowTextureCoords.x + (int)shadowTextureCoords.y * SHADOW_WIDTH];
 		//取得当前片元在光源视角下的深度
-		float currentDepth = LinearizeDepth(shadowTextureCoords.z);
-		// 检查当前片元是否在阴影中
+		float currentDepth = shadowTextureCoords.z;
+		if (defaultCamera.ProjectionMode) {
+			//透视投影中需要对z值线性化，避免冲突
+			closestDepth = LinearizeDepth(closestDepth);
+			currentDepth = LinearizeDepth(currentDepth);
+			//std::cout << "ProjectionMode" << defaultCamera.ProjectionMode << std::endl;
+		}
+		//std::cout << "closestDepth"<< closestDepth <<std::endl;
+		//std::cout << "currentDepth"<< currentDepth <<std::endl;
+		//// 检查当前片元是否在阴影中
 		return currentDepth - bias > closestDepth ? 1.0 : 0.0;
+		//return 0;
 	}
 	
 	virtual bool fragment(VerInf verInf, TGAColor& color) {
@@ -95,18 +109,19 @@ struct Shader : public IShader {
 		}
 
 		//设置光照
-		float lightPower = 10;
+		float lightPower = 5;
 		//环境光
-		float ambient = 0.2f;
+		float ambient = 0.5f;
 		Vec3f vertPos = verInf.world_pos;
 		
 		//衰减
 		Vec3f lightDir = (lightPos - vertPos);
 		float dis = lightDir.norm();
-		lightDir = lightDir / dis;
+		float recip_dis = 1.0f / dis;
+		lightDir = lightDir * recip_dis;
 
 		//漫反射
-		float diff = clamp<float>(std::abs(lightDir * normal), 0, 1);
+		float diff = clamp<float>(std::abs(lightDir * (-1) * normal), 0, 1);
 
 		//镜面反射
 		Vec3f viewDir = (defaultCamera.getPos() - vertPos).normalize();
@@ -114,7 +129,6 @@ struct Shader : public IShader {
 		float spec = clamp<float>(std::abs(normal * hafe), 0, 1);
 
 		
-
 		//设置阴影偏移
 		float bias = std::max(0.05 * (1.0 - (normal*lightDir)), 0.005);
 		//计算该点在不在阴影区域
@@ -123,7 +137,7 @@ struct Shader : public IShader {
 		TGAColor c = model->diffuse(uv);
 		color = c;
 		for (int i = 0; i < 3; i++) {
-			float light = (1 - isInShadow) * (1 * diff + 1 * spec) * lightPower / dis/ dis;
+			float light = (1 - isInShadow) * (1 * diff + 1* spec ) * lightPower * recip_dis * recip_dis;
 			//float light = (1 * diff + 1 * spec) * lightPower;
 			float rate = clamp<float>(ambient + light,0,10);
 			float tempColor = c[i] * rate;
@@ -145,6 +159,10 @@ struct DepthShader : public IShader {
 	}
 
 	virtual bool fragment(VerInf verInf, TGAColor& color) {
+		if (defaultCamera.ProjectionMode) {
+			float far_plane = defaultCamera.getFar();
+			verInf.depth = LinearizeDepth(verInf.depth)/ far_plane;
+		}
 		color = TGAColor(255, 255, 255,255) * verInf.depth;
 		return false;
 	}
@@ -157,9 +175,12 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 
 	//记录旧摄像机数据
 	Camera oldCam = defaultCamera;
+
 	//将摄像机摆放到光源位置
-	defaultCamera.setCamera(lightPos, center, up);
-	defaultCamera.setFov(100);
+	//defaultCamera.enableProjectMode(false);
+	Vec3f lightPos2 = lightPos * 1;
+	defaultCamera.setCamera(lightPos2, center, up);
+	defaultCamera.setFov(70);
 
 	//计算矩阵
 	ViewMatrix = defaultCamera.getViewMatrix();
@@ -169,6 +190,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 
 	//关闭面剔除
 	enableFaceCulling = false;
+	//enableFrontFaceCulling = true;
 
 	//计算阴影贴图
 	for (int m = 0; m < models.size(); m++) {
@@ -187,6 +209,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	defaultCamera = oldCam;
 	//启动背面剔除
 	enableFaceCulling = true;
+	//enableFrontFaceCulling = false;
 }
 
 void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer) {
@@ -239,7 +262,8 @@ int main(int argc, char** argv) {
 			//"obj/african_head/african_head_eye_inner.obj",
 			"obj/diablo3_pose/diablo3_pose.obj",
 			"obj/floor.obj",
-			"obj/window.obj",
+			//"obj/floor1.obj",
+			//"obj/window.obj",
 		};
 
 		//载入需要渲染的模型
@@ -249,7 +273,7 @@ int main(int argc, char** argv) {
 		}
 
 		//创建相机
-		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.3, 7, 60);
+		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.3, 10, 60);
 
 		//初始化矩阵
 		ViewMatrix = Matrix::identity();
@@ -275,10 +299,12 @@ int main(int argc, char** argv) {
 		// 启动背面剔除
 		enableFaceCulling = true;
 		enableFrontFaceCulling = false;
-		
+
 		//帧计数器
 		int timer = 0;
 		float angle = 0;
+		
+		
 
 		//While application is running
 		while (KMH.SDL_Runing){
@@ -296,7 +322,7 @@ int main(int argc, char** argv) {
 			KMH.getMouseKeyEven(NULL, deltaTime);
 
 			//光源旋转
-			angle += 60 * deltaTime;
+			angle += 10 * deltaTime;
 			float radio = 2;
 			float lightX = radio * cos(angle * DegToRad);
 			float lightZ = radio * sin(angle * DegToRad);
@@ -305,7 +331,7 @@ int main(int argc, char** argv) {
 
 			//绘制shadow map
 			drawShadowMap(models, shadowBuffer, shadowTexture);
-
+			
 			//根据shadow map绘制模型
 			draw(models, drawBuffer, shadowBuffer, zbuffer);
 
