@@ -6,6 +6,10 @@ Matrix ModelMatrix;
 Matrix ViewMatrix;
 Matrix ProjectionMatrix;
 Matrix MVP;
+Matrix lightSpaceMatrix;
+
+bool enableFaceCulling;
+bool enableFrontFaceCulling;
 
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
@@ -18,7 +22,7 @@ inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& f
 	result.uv = lerp(v1.uv, v2.uv, factor);
 	result.normal = lerp(v1.normal, v2.normal, factor);
 	result.ndc_coord = lerp(v1.ndc_coord, v2.ndc_coord, factor);
-
+	//result.clipPosLightSpace = lerp(v1.clipPosLightSpace, v2.clipPosLightSpace, factor);
 	return result;
 }
 
@@ -90,7 +94,10 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	*/
 
 	float signed_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-	return signed_area <= 0;
+	if(enableFrontFaceCulling)
+		return signed_area > 0;
+	else
+		return signed_area <= 0;
 }
 void draw2DFrame(VerInf** vertexs, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
 	Vec2i screen_coords[3];
@@ -156,13 +163,12 @@ inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) 
 }
 
 inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
-	float near = defaultCamera.NEAR;
-	float far = defaultCamera.FAR;
+	float near = defaultCamera.getNear();
+	float far = defaultCamera.getFar();
 	if (v1.w < near && v2.w < near && v3.w < near)
 		return false;
 	if (v1.w > far && v2.w > far && v3.w > far)
 		return false;
-
 	if (fabs(v1[0]) <= fabs(v1.w) || fabs(v1[1]) <= fabs(v1.w) || fabs(v1[2]) <= fabs(v1.w))
 		return true;
 	if (fabs(v2[0]) <= fabs(v2.w) || fabs(v2[1]) <= fabs(v2.w) || fabs(v2[2]) <= fabs(v2.w))
@@ -253,36 +259,35 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 
 	Vec2i P(0, 0);
 	TGAColor color;
+	VerInf temp;
 	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
 			Vec3f weights = calculate_weights(screen_coords[0], screen_coords[1], screen_coords[2], P);
-
 			int weight0_okay = weights.x > -EPSILON;
 			int weight1_okay = weights.y > -EPSILON;
 			int weight2_okay = weights.z > -EPSILON;
 			if (weight0_okay && weight1_okay && weight2_okay) {
 				int zbufferInd = P.x + P.y * width;
-				double frag_depth = interpolate_depth(screen_depths, weights);
-
+				double frag_depth = LinearizeDepth(interpolate_depth(screen_depths, weights));
+				//double frag_depth = interpolate_depth(screen_depths, weights);
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
 					weights = weights / (weights[0] + weights[1] + weights[2]);
 					
 					//为面元着色器准备参数
-					VerInf temp;
 					temp.uv = interpolate(verInf[0]->uv, verInf[1]->uv, verInf[2]->uv,weights);
 					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos,weights);
 					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal,weights);
+					//temp.ndc_coord = interpolate(verInf[0]->ndc_coord, verInf[1]->ndc_coord, verInf[2]->ndc_coord,weights);
+					temp.depth = frag_depth;
 
 					//调用面元着色器
 					bool discard = shader.fragment(temp, color);
-					//std::cout << frag_depth << " : " << frag_depth * 255 << std::endl;
-					//color = TGAColor(frag_depth * 255, frag_depth * 255, frag_depth * 255, 255);
 					if (!discard) {
 						//更新zbuffer
 						zbuffer[zbufferInd] = frag_depth;
-						float fogRange = 0.04;
+						float fogRange = 0.3;
 						float fogStartPos = 1 - fogRange;
 						float rate = (frag_depth - fogStartPos) / fogRange;
 						rate = clamp(rate, 0.0f, 1.0f);
@@ -313,7 +318,7 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 
 	/* perspective division */
 	for (int i = 0; i < clipingVertexs.size(); i++) {
-		clipingVertexs[i].recip_w = 1 / clipingVertexs[i].clip_coord[3];
+		clipingVertexs[i].recip_w = 1 / clipingVertexs[i].clip_coord.w;
 		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord) * clipingVertexs[i].recip_w;
 	}
 
@@ -324,7 +329,7 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 		verList[2] = &clipingVertexs[i + 2];
 
 		/* back-face culling */
-		if (is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
+		if (enableFaceCulling && is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
 			//std::cout << "back_facing" << std::endl;
 			return;
 		}
@@ -335,8 +340,6 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 	}
 
 }
-
-
 
 Matrix translate(double x, double y, double z) {
 	Matrix t;
@@ -411,23 +414,25 @@ Matrix lookat(Vec3f &eye, Vec3f& center, Vec3f& up){
 	return Minv;
 }
 
-Matrix setFrustum(double left, double right, double bottom, double top, double near, double far) {
-	double x_range = right - left;
-	double y_range = top - bottom;
-	double z_range = far - near;
 
-	Matrix matrix;
-	matrix= Matrix::identity();
-	matrix[0][0] = 2.0 * near / x_range;
-	matrix[0][0] = 2.0 * near / y_range;
-	matrix[0][0] = (left + right) / x_range;
-	matrix[0][0] = (bottom + top) / y_range;
-	matrix[0][0] = -(near + far) / z_range;
-	matrix[0][0] = -2.0 * near * far / z_range;
-	matrix[0][0] = -1.0;
-	matrix[0][0] = 0.0;
-	return matrix;
-}
+
+//Matrix setFrustum(double left, double right, double bottom, double top, double near, double far) {
+//	double x_range = right - left;
+//	double y_range = top - bottom;
+//	double z_range = far - near;
+//
+//	Matrix matrix;
+//	matrix= Matrix::identity();
+//	matrix[0][0] = 2.0 * near / x_range;
+//	matrix[0][0] = 2.0 * near / y_range;
+//	matrix[0][0] = (left + right) / x_range;
+//	matrix[0][0] = (bottom + top) / y_range;
+//	matrix[0][0] = -(near + far) / z_range;
+//	matrix[0][0] = -2.0 * near * far / z_range;
+//	matrix[0][0] = -1.0;
+//	matrix[0][0] = 0.0;
+//	return matrix;
+//}
 
 Matrix setFrustum(double fovy, double aspect, double near, double far)
 {
@@ -447,6 +452,18 @@ Matrix setFrustum(double fovy, double aspect, double near, double far)
 
 }
 
+Matrix mat4_orthographic(float right, float top, float near, float far) {
+	float z_range = far - near;
+	Matrix matrix = Matrix::identity();
+	assert(right > 0 && top > 0 && z_range > 0);
+	matrix[0][0] = 1 / right;
+	matrix[1][1] = 1 / top;
+	matrix[2][2] = -2 / z_range;
+	matrix[2][3] = -(near + far) / z_range;
+	return matrix;
+}
+
+
 Matrix projection(double width, double height, double zNear, double zFar) {
 	Matrix projection;
 	double r = width / 2.0;
@@ -458,6 +475,16 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	projection[3][2] = -1;
 	return projection;
 }
+
+
+inline float LinearizeDepth(float depth)
+{
+	float near_plane = defaultCamera.getNear();
+	float far_plane = defaultCamera.getFar();
+	float z = depth * 2.0 - 1.0; // Back to NDC 
+	return ((2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane)))/ far_plane;
+}
+
 
 Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
 	double x = double((double)ndc_coord.x + 1.0f) * 0.5f * (double)width;   /* [-1, 1] -> [0, w] */

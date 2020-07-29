@@ -2,26 +2,28 @@
 
 #include "SDL.h"
 #include "SDL_revision.h"
-
 #include "myVector.h"
 
 class SDLWindow
 {
-	
+	unsigned int width;
+	unsigned int height;
 	//The window we'll be rendering to
 	SDL_Window* gWindow = NULL;
 	//The window renderer
 	SDL_Renderer* gRenderer = NULL;
-	//Starts up SDL and creates window
-	inline void init(const int SCREEN_WIDTH, const int SCREEN_HEIGHT);
+	//初始换SDL并创建Window和renderer
+	inline void init(const char* name, const int SCREEN_WIDTH, const int SCREEN_HEIGHT);
+	inline void drawPixel(int& x, int& y, const int& width, const int& height, ColorVec* drawBuffer);
 public:
 	bool initSuccess;
-	SDLWindow(const int SCREEN_WIDTH, const int SCREEN_HEIGHT);
-	//Frees media and shuts down SDL
+	//构造函数调用init
+	SDLWindow(const char* name,const int SCREEN_WIDTH, const int SCREEN_HEIGHT);
+	//关闭SDL窗口
 	void close();
-
-	void refresh();
-
-	void drawPixel(int& x, int& y, const int& width, const int& height, ColorVec* drawBuffer);
+	//更新窗口内容
+	void refresh(ColorVec* buffer);
+	//在窗口中绘制像素
+	
 };
 

@@ -16,6 +16,10 @@ extern Matrix ModelMatrix;
 extern Matrix ViewMatrix;
 extern Matrix ProjectionMatrix;
 extern Matrix MVP;
+extern Matrix lightSpaceMatrix;
+
+extern bool enableFaceCulling;
+extern bool enableFrontFaceCulling;
 
 //数学
 template <typename T>
@@ -34,11 +38,15 @@ public:
 	Vec3f world_pos;
 	Vec4f clip_coord;
 	Vec3f ndc_coord;
-
 	Vec3f normal;
 	Vec2f uv;
 
+	double depth;
 	double recip_w;
+	//double light_recip_w;
+	
+	//Vec4f clipPosLightSpace;
+
 
 	static VerInf verLerp(const VerInf& v1, const VerInf& v2, const float& factor);
 };
@@ -51,7 +59,7 @@ struct IShader {
 
 //绘制三角面片
 void triangle(bool farme, VerInf* vertexs, IShader& shader, int width, int height, double* zbuffer, ColorVec* drawBuffer);
-
+void drawTriangle2D(VerInf** verInf, IShader& shader, int& width, int& height, double* zbuffer, ColorVec* drawBuffer);
 //模型矩阵
 Matrix translate(double x, double y, double z);
 Matrix rotate(Vec3f& axis, double theta);
@@ -62,8 +70,11 @@ Matrix lookat(Vec3f& eye, Vec3f& center, Vec3f& up);
 
 //透视矩阵
 Matrix projection(double width, double height, double zNear, double zFar);
-Matrix setFrustum(double l, double r, double b, double t, double n, double f);
+/*Matrix setFrustum(double l, double r, double b, double t, double n, double f);*/
 Matrix setFrustum(double fovY, double aspectRatio, double front, double back);
+Matrix mat4_orthographic(float right, float top, float near, float far);
+
+inline float LinearizeDepth(float depth);
 
 //视窗变换
 Vec3f viewport_transform(int width, int height, Vec3f ndc_coord);

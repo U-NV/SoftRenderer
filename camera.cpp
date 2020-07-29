@@ -6,8 +6,16 @@ Camera::Camera()
 }
 
 inline void Camera::setViewMatrix() {
-	targetPos = camPos + camDir;
-	ViewMatrix = lookat(camPos, targetPos, camUp);
+	camTargetPos = camPos + camDir;
+	ViewMatrix = lookat(camPos, camTargetPos, camUp);
+}
+
+void Camera::setCamera(Vec3f& pos, Vec3f& targetPos, Vec3f& up)
+{
+	camPos = pos;
+	camTargetPos = targetPos;
+	camUp = up;
+	ViewMatrix = lookat(camPos, camTargetPos, camUp);
 }
 
 Camera::Camera(float screenAspect,float near = 0.1f,float far = 20,float fovy = 60)
@@ -17,6 +25,7 @@ Camera::Camera(float screenAspect,float near = 0.1f,float far = 20,float fovy = 
 	FOVY = fovy;
 	aspect = screenAspect;
 	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	//ProjectionMatrix = mat4_orthographic(6,4,near, far);
 	setViewMatrix();
 }
 
@@ -48,6 +57,26 @@ void Camera::changeFov(float amount)
 	FOVY += amount;
 	FOVY = std::max(0.0f, std::min(90.0f, FOVY));
 	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+}
+
+void Camera::setFov(float Fov)
+{
+	FOVY = Fov;
+	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+}
+
+Vec3f Camera::getPos()
+{
+	return camPos;
+}
+
+float Camera::getNear() {
+	return NEAR;
+}
+
+float Camera::getFar()
+{
+	return FAR;
 }
 
 void Camera::rotateCamera(Vec2f offset)
