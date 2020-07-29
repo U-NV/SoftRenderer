@@ -24,15 +24,11 @@ Vec3f camDefaultPos(0, 0, 1);
 ColorVec backGroundColor(100, 30, 0x00, 0xFF);
 ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 
-
 Model* model;
 Vec3f lightPos(2, 2,2);
-//Vec3f lightDir(-5, -5,-5);
 
 clock_t lastFrame = 0;
 float deltaTime = 0;
-
-const float depth = 2000.f;
 
 struct Shader : public IShader {
 	Matrix *LightSpaceMatrix;
@@ -50,42 +46,25 @@ struct Shader : public IShader {
 		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(model->vert(iface, nthvert)));
 		//裁切坐标
 		faceVer.clip_coord = MVP * embed<4>(model->vert(iface, nthvert));
-
-		//光源空间裁切坐标
-		//faceVer.clipPosLightSpace = *LightSpaceMatrix *embed<4>(faceVer.world_pos,1.0f);
 	}
 
 	float inShadow(Vec3f& world_pos, float& bias) {
+		//计算顶点在光照坐标系的坐标
 		Vec4f clipPosLightSpace = *LightSpaceMatrix * embed<4>(world_pos);
+		//进行透视除法
 		float light_recip_w = 1 / clipPosLightSpace.w;
 		Vec3f ndcLightSpace = proj<3>(clipPosLightSpace * light_recip_w);
+		//因为没有进行各种裁切，故这里进行clamp，防止数据溢出
 		ndcLightSpace.x = clamp(ndcLightSpace.x, -1.0f, 1.0f);
 		ndcLightSpace.y = clamp(ndcLightSpace.y, -1.0f, 1.0f);
 		ndcLightSpace.z = clamp(ndcLightSpace.z, -1.0f, 1.0f);
+		//变换到阴影贴图的范围
 		Vec3f shadowTextureCoords = viewport_transform(SHADOW_WIDTH, SHADOW_HEIGHT, ndcLightSpace);
-
-		// 计算顶点在光源坐标系的屏幕坐标
-		//for (int i = 0; i < 3; i++) {
-		//	double light_recip_w = 1 / verInf[i]->clipPosLightSpace.w;
-		//	verInf[i]->ndcLightSpace = proj<3>(verInf[i]->clipPosLightSpace * light_recip_w);
-		//	Vec3f window_coord = viewport_transform(1024, 1024, verInf[i]->ndcLightSpace);
-		//	verInf[i]->screenPosLightSpace = Vec2i((int)window_coord.x, (int)window_coord.y);
-		//	verInf[i]->depthLightSpace = window_coord.z;
-		//}
-
-		// 变换到阴影贴图的范围
-		//std::cout << "ndcPosLightSpace:" << ndcPosLightSpace << std::endl;
-		// 取得最近点的深度(使用[0,1]范围下的fragPosLight当坐标)
-		//std::cout << "shadowPos:" << shadowTextureCoords << std::endl;
+		//从缓存中得到最近的深度
 		float closestDepth = ShadowBuffer[(int)shadowTextureCoords.x + (int)shadowTextureCoords.y * SHADOW_WIDTH];
-		// 取得当前片元在光源视角下的深度
+		//取得当前片元在光源视角下的深度
 		float currentDepth = LinearizeDepth(shadowTextureCoords.z);
-		//float currentDepth = shadowTextureCoords.z;
-		//std::cout << "currentDepth:" << currentDepth << std::endl;
-		//std::cout << "closestDepth:" << closestDepth << std::endl;
 		// 检查当前片元是否在阴影中
-		//设置阴影偏移
-
 		return currentDepth - bias > closestDepth ? 1.0 : 0.0;
 	}
 	
@@ -161,9 +140,8 @@ struct DepthShader : public IShader {
 		LightSpaceMatrix = lightSpaceMatrix;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
-		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert)); // read the vertex from .obj file
-		faceVer.clip_coord = *LightSpaceMatrix * ModelMatrix  * gl_Vertex;          // transform it to screen coordinates
-		//varying_tri.set_col(nthvert, proj<3>(gl_Vertex / gl_Vertex[3]));
+		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
+		faceVer.clip_coord = *LightSpaceMatrix * ModelMatrix  * gl_Vertex; 
 	}
 
 	virtual bool fragment(VerInf verInf, TGAColor& color) {
