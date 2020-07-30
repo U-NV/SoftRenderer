@@ -1,8 +1,12 @@
 #include"camera.h"
 
-Camera defaultCamera;
 Camera::Camera()
 {
+	NEAR = 0.1f;
+	FAR = 20;
+	FOVY = 60;
+	aspect = 1920/1080;
+	ProjectionMode = true;
 }
 
 inline void Camera::setViewMatrix() {
@@ -74,6 +78,17 @@ void Camera::setFov(float Fov)
 		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }
 
+
+void Camera::setClipPlane(float near,float far)
+{
+	NEAR = near;
+	FAR = far;
+	if (ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
+}
+
 Vec3f Camera::getPos()
 {
 	return camPos;
@@ -86,15 +101,6 @@ float Camera::getNear() {
 float Camera::getFar()
 {
 	return FAR;
-}
-
-void Camera::enableProjectMode(bool flag)
-{
-	ProjectionMode = flag;
-	if (ProjectionMode)
-		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
-	else
-		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }
 
 void Camera::rotateCamera(Vec2f offset)
@@ -125,4 +131,18 @@ Matrix Camera::getViewMatrix()
 Matrix Camera::getProjMatrix()
 {
 	return ProjectionMatrix;
+}
+
+bool Camera::getProjectMode()
+{
+	return ProjectionMode;
+}
+
+void Camera::setProjectMode(bool flag)
+{
+	ProjectionMode = flag;
+	if (ProjectionMode)
+		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
+	else
+		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
 }

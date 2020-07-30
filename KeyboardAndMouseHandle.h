@@ -18,13 +18,11 @@ private:
 
 	Vec2f MousePosNow;
 	Vec2f MousePosPre;
+
+	Camera* controlCamera;
 public:
 	bool SDL_Runing;
-	KeyboardAndMouseHandle(int SCREEN_WIDTH,int SCREEN_HEIGHT) {
-
-		MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-		MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-	}
+	KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera);
 
 	void handlerKeyboardEvent(float deltaTime);
 	int getMouseKeyEven(void* opaque, float deltaTime);

@@ -58,8 +58,11 @@ struct IShader {
 };
 
 //绘制三角面片
-void triangle(bool farme, VerInf* vertexs, IShader& shader, int width, int height, double* zbuffer, ColorVec* drawBuffer);
-void drawTriangle2D(VerInf** verInf, IShader& shader, int& width, int& height, double* zbuffer, ColorVec* drawBuffer);
+void triangle(VerInf* vertexs, IShader& shader, 
+	const int& width, const int& height, const float& near, const float& far, 
+	double* zbuffer, ColorVec* drawBuffer,
+	bool farme, bool fog);
+
 //模型矩阵
 Matrix translate(double x, double y, double z);
 Matrix rotate(Vec3f& axis, double theta);
@@ -74,7 +77,7 @@ Matrix projection(double width, double height, double zNear, double zFar);
 Matrix setFrustum(double fovY, double aspectRatio, double front, double back);
 Matrix mat4_orthographic(float right, float top, float near, float far);
 
-float LinearizeDepth(float depth);
+float LinearizeDepth(float depth, float near, float far);
 
 //视窗变换
 Vec3f viewport_transform(int width, int height, Vec3f ndc_coord);

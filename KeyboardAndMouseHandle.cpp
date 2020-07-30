@@ -1,5 +1,12 @@
 #include "KeyboardAndMouseHandle.h"
 
+KeyboardAndMouseHandle::KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera)
+{
+	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+	controlCamera = camera;
+}
+
 void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 {
 	float cameraSpeed = 2.0f * deltaTime;
@@ -7,22 +14,22 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 		SDL_Runing = false;
 	}
 	if (keysEvent[SDLK_w]) {
-		defaultCamera.moveStraight(cameraSpeed);
+		controlCamera->moveStraight(cameraSpeed);
 	}
 	if (keysEvent[SDLK_s]) {
-		defaultCamera.moveStraight(-cameraSpeed);
+		controlCamera->moveStraight(-cameraSpeed);
 	}
 	if (keysEvent[SDLK_a]) {
-		defaultCamera.moveTransverse(-cameraSpeed);
+		controlCamera->moveTransverse(-cameraSpeed);
 	}
 	if (keysEvent[SDLK_d]) {
-		defaultCamera.moveTransverse(cameraSpeed);
+		controlCamera->moveTransverse(cameraSpeed);
 	}
 	if (keysEvent[SDLK_e]) {
-		defaultCamera.moveVertical(cameraSpeed);
+		controlCamera->moveVertical(cameraSpeed);
 	}
 	if (keysEvent[SDLK_q]) {
-		defaultCamera.moveVertical(-cameraSpeed);
+		controlCamera->moveVertical(-cameraSpeed);
 	}
 
 	if (rightKeyPress || leftKeyPress) {
@@ -34,7 +41,7 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 		offset.y *= sensitivity;
 
 		if (rightKeyPress) {
-			defaultCamera.rotateCamera(offset * deltaTime);
+			controlCamera->rotateCamera(offset * deltaTime);
 		}
 		if (leftKeyPress) {
 
@@ -42,7 +49,7 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 	}
 
 	if (mouseWheelAmount != 0) {
-		defaultCamera.changeFov(-mouseWheelAmount * cameraSpeed);
+		controlCamera->changeFov(-mouseWheelAmount * cameraSpeed);
 		mouseWheelAmount = 0;
 	}
 }

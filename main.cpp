@@ -25,14 +25,18 @@ ColorVec backGroundColor(100, 30, 0x00, 0xFF);
 ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 
 //光源位置
-Vec3f lightPos(1, 1, 1);
+Vec3f lightPos(1, 3, 1);
 
-
+//模型指针
 Model* model;
 
-
+//计数器
 clock_t lastFrame = 0;
 float deltaTime = 0;
+
+//摄像机
+Camera defaultCamera;
+Camera lightCamera;
 
 struct Shader : public IShader {
 	Matrix *LightSpaceMatrix;
@@ -66,13 +70,18 @@ struct Shader : public IShader {
 		//变换到阴影贴图的范围
 		Vec3f shadowTextureCoords = viewport_transform(SHADOW_WIDTH, SHADOW_HEIGHT, ndcLightSpace);
 		//从缓存中得到最近的深度
-		float closestDepth = ShadowBuffer[(int)shadowTextureCoords.x + (int)shadowTextureCoords.y * SHADOW_WIDTH];
+		int x = clamp((int)shadowTextureCoords.x, 0, SHADOW_WIDTH - 1);
+		int y = clamp((int)shadowTextureCoords.y, 0, SHADOW_HEIGHT - 1);
+		int id = x + y* SHADOW_WIDTH;
+		float closestDepth = ShadowBuffer[id];
 		//取得当前片元在光源视角下的深度
 		float currentDepth = shadowTextureCoords.z;
-		if (defaultCamera.ProjectionMode) {
+		if (defaultCamera.getProjectMode()) {
 			//透视投影中需要对z值线性化，避免冲突
-			closestDepth = LinearizeDepth(closestDepth);
-			currentDepth = LinearizeDepth(currentDepth);
+			float near = defaultCamera.getNear();
+			float far = defaultCamera.getFar();
+			closestDepth = LinearizeDepth(closestDepth, near, far);
+			currentDepth = LinearizeDepth(currentDepth, near, far);
 			//std::cout << "ProjectionMode" << defaultCamera.ProjectionMode << std::endl;
 		}
 		//std::cout << "closestDepth"<< closestDepth <<std::endl;
@@ -109,7 +118,7 @@ struct Shader : public IShader {
 		}
 
 		//设置光照
-		float lightPower = 5;
+		float lightPower = 6;
 		//环境光
 		float ambient = 0.5f;
 		Vec3f vertPos = verInf.world_pos;
@@ -130,7 +139,7 @@ struct Shader : public IShader {
 
 		
 		//设置阴影偏移
-		float bias = std::max(0.05 * (1.0 - (normal*lightDir)), 0.005);
+		float bias = std::max(0.05 * (1.0 - diff), 0.01);
 		//计算该点在不在阴影区域
 		float isInShadow = inShadow(verInf.world_pos, bias);
 
@@ -159,9 +168,10 @@ struct DepthShader : public IShader {
 	}
 
 	virtual bool fragment(VerInf verInf, TGAColor& color) {
-		if (defaultCamera.ProjectionMode) {
-			float far_plane = defaultCamera.getFar();
-			verInf.depth = LinearizeDepth(verInf.depth)/ far_plane;
+		if (lightCamera.getProjectMode()) {
+			float far = lightCamera.getFar();
+			float near = lightCamera.getNear();
+			verInf.depth = LinearizeDepth(verInf.depth,near, far)/ far;
 		}
 		color = TGAColor(255, 255, 255,255) * verInf.depth;
 		return false;
@@ -173,18 +183,16 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
 	std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_WIDTH, white);
 
-	//记录旧摄像机数据
-	Camera oldCam = defaultCamera;
-
 	//将摄像机摆放到光源位置
-	//defaultCamera.enableProjectMode(false);
-	Vec3f lightPos2 = lightPos * 1;
-	defaultCamera.setCamera(lightPos2, center, up);
-	defaultCamera.setFov(70);
+	//lightCamera.enableProjectMode(false);
+	Vec3f lightPos2 = lightPos;
+	lightCamera.setCamera(lightPos2, center, up);
+	lightCamera.setClipPlane(2,6);
+	lightCamera.setFov(50);
 
 	//计算矩阵
-	ViewMatrix = defaultCamera.getViewMatrix();
-	ProjectionMatrix = defaultCamera.getProjMatrix();
+	ViewMatrix = lightCamera.getViewMatrix();
+	ProjectionMatrix = lightCamera.getProjMatrix();
 	lightSpaceMatrix = ProjectionMatrix * ViewMatrix;
 	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
@@ -201,15 +209,18 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 			for (int j = 0; j < 3; j++) {
 				depthshader.vertex(i, j, faceVer[j]);
 			}
-			triangle(false, faceVer, depthshader, SHADOW_WIDTH, SHADOW_HEIGHT, shadowBuffer, shadowTexture);
-			//triangle(true,faceVer,shader, SCREEN_WIDTH, SCREEN_HEIGHT, zbuffer, drawBuffer);
+			triangle(faceVer, depthshader,//传入顶点数据和shader
+					SHADOW_WIDTH, SHADOW_HEIGHT,//传入屏幕大小用于视窗变换
+					lightCamera.getNear(),lightCamera.getFar(),//传入透视远近平面用于裁切和线性zbuffer
+					shadowBuffer, shadowTexture,//传入绘制buffer
+					false,//是否绘制线框模型
+					false//是否绘雾
+					);
 		}
 	}
-	//恢复摄像机
-	defaultCamera = oldCam;
 	//启动背面剔除
 	enableFaceCulling = true;
-	//enableFrontFaceCulling = false;
+	enableFrontFaceCulling = false;
 }
 
 void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer) {
@@ -233,8 +244,13 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 			for (int j = 0; j < 3; j++) {
 				shader.vertex(i, j, faceVer[j]);
 			}
-			triangle(false, faceVer, shader, SCREEN_WIDTH, SCREEN_HEIGHT, zbuffer, drawBuffer);
-			//triangle(true,faceVer,shader, SCREEN_WIDTH, SCREEN_HEIGHT, zbuffer, drawBuffer);
+			triangle(faceVer, shader, //传入顶点数据和shader
+					SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+					defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
+					zbuffer, drawBuffer,//传入绘制buffer
+					false,//是否绘制线框模型
+					true//是否绘雾
+				);
 		}
 	}
 }
@@ -242,10 +258,10 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow window("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT);
-	//SDLWindow shadow("shadow",SHADOW_WIDTH, SHADOW_HEIGHT);
+	SDLWindow shadow("shadow",SHADOW_WIDTH, SHADOW_HEIGHT);
 
 	//监听键鼠事件
-	KeyboardAndMouseHandle KMH(SCREEN_WIDTH, SCREEN_HEIGHT);
+	KeyboardAndMouseHandle KMH(SCREEN_WIDTH, SCREEN_HEIGHT,&defaultCamera);
 
 	if (!window.initSuccess)
 	{
@@ -274,6 +290,7 @@ int main(int argc, char** argv) {
 
 		//创建相机
 		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.3, 10, 60);
+		lightCamera = Camera((float)SHADOW_WIDTH / SHADOW_HEIGHT, 0.3, 10, 60);
 
 		//初始化矩阵
 		ViewMatrix = Matrix::identity();
@@ -304,8 +321,6 @@ int main(int argc, char** argv) {
 		int timer = 0;
 		float angle = 0;
 		
-		
-
 		//While application is running
 		while (KMH.SDL_Runing){
 			//计算deltaTime与fps
@@ -314,7 +329,7 @@ int main(int argc, char** argv) {
 			deltaTime = float((float)currentFrame - lastFrame)/ CLOCKS_PER_SEC;
 			lastFrame = currentFrame;
 			if (timer >= 1 / deltaTime) {
-				std::cout << "Current Frames Per Second:" << 1 / deltaTime << std::endl;
+				std::cout << "Current Frames Per Second:" << int(1 / deltaTime + 0.5f) << std::endl;
 				timer = 0;
 			}
 			
@@ -343,7 +358,7 @@ int main(int argc, char** argv) {
 			//更新屏幕显示内容
 			window.refresh(showBuffer);
 
-			//shadow.refresh(shadowTexture);
+			shadow.refresh(shadowTexture);
 		}
 		delete[] zbuffer;
 		delete[] showBuffer;
@@ -353,7 +368,7 @@ int main(int argc, char** argv) {
 	}
 	//Free resources and close SDL
 	window.close();
-	//shadow.close();
+	shadow.close();
 	return 0;
 }
 

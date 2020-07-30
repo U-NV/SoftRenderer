@@ -19,21 +19,17 @@ private:
 	Vec3f camPos = { 0, 0, 3 };
 	Vec3f camDir = { 0, 0, -1 };
 	Vec3f camTargetPos = { 0, 0, -1 };
-	//Vec3f targetPos = { 0, 0, 0 };
-
-	
 
 	Matrix ViewMatrix;
 	Matrix ProjectionMatrix;
-public:
 	bool ProjectionMode = true;
+public:
+	
 	Camera();
 	Camera(float screenAspect, float near, float far, float fovy);
 	~ Camera();
 
 	inline void setViewMatrix();
-
-	void setCamera(Vec3f& pos, Vec3f& targetPos, Vec3f& up);
 
 	void moveStraight(float amount); //前后移动
 	void moveTransverse(float amount); //左右移动
@@ -43,16 +39,19 @@ public:
 	void setFov(float Fov);  // 改变视野
 
 	Vec3f getPos();
+	void setCamera(Vec3f& pos, Vec3f& targetPos, Vec3f& up);
+
 	float getNear();
 	float getFar();
+	void setClipPlane(float near, float far);
 
-	void enableProjectMode(bool flag);
+	bool getProjectMode();
+	void setProjectMode(bool flag);
 
 	Matrix getViewMatrix();
 	Matrix getProjMatrix();
+
 };
 
-
-extern Camera defaultCamera;
 
 #endif

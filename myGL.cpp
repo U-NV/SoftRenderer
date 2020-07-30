@@ -14,10 +14,8 @@ bool enableFrontFaceCulling;
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
 
-float LinearizeDepth(float depth)
+float LinearizeDepth(float depth, float near_plane, float far_plane)
 {
-	float near_plane = defaultCamera.getNear();
-	float far_plane = defaultCamera.getFar();
 	float z = depth * 2.0 - 1.0; // Back to NDC 
 	return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
 }
@@ -34,7 +32,7 @@ inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& f
 	return result;
 }
 
-inline void setPixelBuffer(int& x, int& y, int& width, int& height, TGAColor& color, ColorVec* drawBuffer) {
+inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, ColorVec* drawBuffer) {
 	int bufferInd = x + y * width;
 	drawBuffer[bufferInd].x = color[2];
 	drawBuffer[bufferInd].y = color[1];
@@ -170,9 +168,7 @@ inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) 
 	return true;
 }
 
-inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
-	float near = defaultCamera.getNear();
-	float far = defaultCamera.getFar();
+inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3, float near, float far) {
 	if (v1.w < near && v2.w < near && v3.w < near)
 		return false;
 	if (v1.w > far && v2.w > far && v3.w > far)
@@ -242,7 +238,10 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 	return output;
 }
 
-void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, double* zbuffer, ColorVec* drawBuffer) {
+void drawTriangle2D(VerInf** verInf, IShader& shader, 
+	const int& width, const int& height, const float& near, const float& far, 
+	double* zbuffer, ColorVec* drawBuffer,
+	bool fog) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
 	
@@ -294,17 +293,19 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 					if (!discard) {
 						//更新zbuffer
 						zbuffer[zbufferInd] = frag_depth;
-						//float fogRange = 0.3;
-						//float fogStartPos = 1 - fogRange;
-						//float rate = (frag_depth - fogStartPos) / fogRange;
-						//rate = clamp(rate, 0.0f, 1.0f);
+						if (fog) {
+							frag_depth = LinearizeDepth(frag_depth, near, far) / far;
+							float fogRange = 0.3;
+							float fogStartPos = 1 - fogRange;
+							float rate = (frag_depth - fogStartPos) / fogRange;
+							rate = clamp(rate, 0.0f, 1.0f);
 
-						//TGAColor deothColor(100, 30, 0x00, rate * 255);
-						////进行alpha混合
-						//TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
-						//color = blendColor(color, colorNow);
-						//color = blendColor(deothColor, color);
-						//
+							TGAColor deothColor(100, 30, 0x00, rate * 255);
+							//进行alpha混合
+							TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+							color = blendColor(color, colorNow);
+							color = blendColor(deothColor, color);
+						}
 						//写入绘制buffer
 						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
 					}
@@ -315,8 +316,11 @@ void drawTriangle2D(VerInf** verInf, IShader& shader, int &width, int &height, d
 	}
 }
 
-void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height, double* zbuffer, ColorVec* drawBuffer) {
-	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord)) {
+void triangle(VerInf* vertexs, IShader& shader,
+	const int& width, const int& height, const float& near, const float& far, 
+	double* zbuffer, ColorVec* drawBuffer,
+	bool farme, bool fog) {
+	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord, near,far)) {
 		return;
 	}
 
@@ -341,7 +345,7 @@ void triangle(bool farme,VerInf* vertexs, IShader& shader, int width, int height
 		if (farme)
 			draw2DFrame(verList, white, width,height,drawBuffer);
 		else
-			drawTriangle2D(verList, shader,  width, height, zbuffer, drawBuffer);
+			drawTriangle2D(verList, shader,  width, height,near,far, zbuffer, drawBuffer, fog);
 	}
 
 }
