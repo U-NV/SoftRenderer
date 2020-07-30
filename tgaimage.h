@@ -3,6 +3,8 @@
 
 #include <fstream>
 
+#define PI 2*acos(0.0)
+
 #pragma pack(push,1)
 struct TGA_Header {
     char idlength;
@@ -101,6 +103,7 @@ public:
     int get_height();
     int get_bytespp();
     unsigned char* buffer();
+    void gaussian_blur(const int radius);
     void clear();
 };
 

@@ -9,10 +9,10 @@
 #include "SDLWindow.h"
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 600;
-const int SCREEN_HEIGHT = 400;
+const int SCREEN_WIDTH = 1920/4;
+const int SCREEN_HEIGHT = 1080/4;
 
-const int SHADOW_WIDTH = 1000, SHADOW_HEIGHT = 1000;
+const int SHADOW_WIDTH = 2000/2, SHADOW_HEIGHT = 2000/2;
 //位置相关参数
 Vec3f up(0, 1, 0);
 Vec3f right(1, 0, 0);
@@ -23,9 +23,10 @@ Vec3f camDefaultPos(0, 0, 1);
 //颜色
 const ColorVec backGroundColor(100, 30, 0x00, 0xFF);
 const ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
+const ColorVec black(0x00, 0x00, 0x00, 0xFF);
 
 //光源位置
-Vec3f lightPos(1, 3, 1);
+Vec3f lightPos(2, 3, -1);
 
 //模型指针
 Model* model;
@@ -41,9 +42,11 @@ Camera lightCamera;
 struct Shader : public IShader {
 	Matrix *LightSpaceMatrix;
 	double* ShadowBuffer;
-	Shader(Matrix *lightSpaceMatrix, double* shadowBuffer) {
+	ColorVec* SAAOTexture;
+	Shader(Matrix *lightSpaceMatrix, double* shadowBuffer, ColorVec* ssao) {
 		LightSpaceMatrix = lightSpaceMatrix;
 		ShadowBuffer = shadowBuffer;
+		SAAOTexture = ssao;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
@@ -123,9 +126,12 @@ struct Shader : public IShader {
 		}
 
 		//设置光照
-		float lightPower = 6;
+		float lightPower = 16;
 		//环境光
-		float ambient = 0.5f;
+		//float saaoAmbient = SAAOTexture[SCREEN_WIDTH * verInf.screen_coord.y + verInf.screen_coord.x].x / 255.0f;
+		float ambient = SAAOTexture[SCREEN_WIDTH * verInf.screen_coord.y + verInf.screen_coord.x].x / 255.0f;
+		ambient = clamp(ambient, 0.2f, 1.0f);
+		//float ambient = 1;
 		Vec3f vertPos = verInf.world_pos;
 		
 		//衰减
@@ -147,8 +153,9 @@ struct Shader : public IShader {
 		float bias = std::max(0.1 * (1.0 - diff), 0.005);
 		//计算该点在不在阴影区域
 		float isInShadow = inShadow(verInf.world_pos, bias);
-
+		//isInShadow = 1;
 		TGAColor c = model->diffuse(uv);
+		//TGAColor c = TGAColor(100,100,100,255);
 		color = c;
 		for (int i = 0; i < 3; i++) {
 			float light = (1 - isInShadow) * (1 * diff + 1* spec ) * lightPower * recip_dis * recip_dis;
@@ -183,6 +190,109 @@ struct DepthShader : public IShader {
 	}
 };
 
+struct SSAOShader : public IShader {
+	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
+		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
+		faceVer.clip_coord = MVP * gl_Vertex;
+	}
+
+	virtual bool fragment(VerInf verInf, TGAColor& color) {
+		color = TGAColor(0, 0, 0,255);
+		return false;
+	}
+};
+
+float max_elevation_angle(double* zbuffer, float radio,float near,float far, Vec2f& p, Vec2f& dir) {
+	float maxangle = 0;
+	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH],near,far)/ far;
+	//double orgZ = zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH];
+	for (float t = 0.; t < radio; t += 1.) {
+		Vec2f cur = p + dir * t;
+		if (cur.x >= SCREEN_WIDTH || cur.y >= SCREEN_HEIGHT || cur.x < 0 || cur.y < 0) return maxangle;
+
+		float distance = (p - cur).norm();
+		//if (distance < 1.f) continue;
+		double nearZ = LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far)/ far;
+		//double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
+		float elevation = nearZ - orgZ;
+		//if (elevation >= 0.2) continue;
+		maxangle = std::max(maxangle, atanf(elevation / distance));
+	}
+	return maxangle;
+}
+
+void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAOTexture) {
+	//清空drawbuffer和zbuffer，绘制新的画面
+	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
+	std::fill(SSAOTexture, SSAOTexture + SCREEN_WIDTH * SCREEN_HEIGHT, white);
+
+	//计算MVP矩阵
+	//首先执行缩放，接着旋转，最后才是平移
+	//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
+
+	float far = defaultCamera.getFar();
+	float near = defaultCamera.getNear();
+	//defaultCamera.setClipPlane(1,6);
+	ViewMatrix = defaultCamera.getViewMatrix();
+	ProjectionMatrix = defaultCamera.getProjMatrix();
+	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+
+	//启动正面剔除
+	enableFaceCulling = true;
+	
+	//绘制zbuffer
+	for (int m = 0; m < models.size(); m++) {
+		SSAOShader shader;
+		VerInf faceVer[3];
+		model = &models[m];
+		for (int i = 0; i < model->nfaces(); i++) {
+			for (int j = 0; j < 3; j++) {
+				shader.vertex(i, j, faceVer[j]);
+			}
+			triangle(faceVer, shader, //传入顶点数据和shader
+				SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+				defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
+				zbuffer, SSAOTexture,//传入绘制buffer
+				false,//是否绘制线框模型
+				false//是否绘雾
+			);
+		}
+	}
+
+	//计算SAAO
+	float halfPI = M_PI / 2;
+	int samplingDir = 4;
+	int dirChangeAlmont = M_PI * 2/samplingDir;
+	
+	Vec2f dirList[4];
+	for (int i = 0; i < samplingDir; i++) {
+		float a = dirChangeAlmont * i;
+		dirList[i] = Vec2f(cos(a), sin(a));
+	}
+	Vec2f posNow(0, 0);
+	for (posNow.x = 0; posNow.x < SCREEN_WIDTH; posNow.x++) {
+		for (posNow.y = 0; posNow.y < SCREEN_HEIGHT; posNow.y++) {
+			int id = posNow.x + posNow.y * SCREEN_WIDTH;
+			//if (zbuffer[id] >=1) continue;
+			float total = 0;
+			
+			for (int i = 0; i < samplingDir;i++ ) {
+				
+				total += halfPI - max_elevation_angle(zbuffer, 2, near, far, posNow, dirList[i]);
+			}
+			//std::cout << total << std::endl;
+			total /= halfPI * samplingDir;
+			total = pow(total, 2000.f);
+			SSAOTexture[id].x = total * 255;
+			SSAOTexture[id].y = total * 255;
+			SSAOTexture[id].z = total * 255;
+			SSAOTexture[id].w = 255;
+		}
+		//std::cout << "ssao persent:" << int((float)x / SCREEN_WIDTH * 100) << "%" << std::endl;
+	}
+
+}
+
 void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* shadowTexture) {
 	//清空shadowMap数据，重新绘制
 	std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
@@ -192,8 +302,8 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	//lightCamera.enableProjectMode(false);
 	Vec3f lightPos2 = lightPos;
 	lightCamera.setCamera(lightPos2, center, up);
-	lightCamera.setClipPlane(2,6);
-	lightCamera.setFov(50);
+	lightCamera.setClipPlane(0.5,8);
+	lightCamera.setFov(40);
 
 	//计算矩阵
 	ViewMatrix = lightCamera.getViewMatrix();
@@ -228,7 +338,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	enableFrontFaceCulling = false;
 }
 
-void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer) {
+void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer, ColorVec* SAAOTexture) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, backGroundColor);
@@ -242,7 +352,7 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		Shader shader(&lightSpaceMatrix, shadowBuffer);
+		Shader shader(&lightSpaceMatrix, shadowBuffer, SAAOTexture);
 		VerInf faceVer[3];
 		model = &models[m];
 		for (int i = 0; i < model->nfaces(); i++) {
@@ -260,13 +370,21 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 	}
 }
 
+
+
+
 //#define showShadow
+#define showSSAO
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow window("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT);
 #ifdef showShadow
 	SDLWindow shadow("shadow", SHADOW_WIDTH, SHADOW_HEIGHT);
 #endif // showShadow
+#ifdef showSSAO
+	SDLWindow SSAO("SSAO", SCREEN_WIDTH, SCREEN_HEIGHT);
+#endif // showSSAO
+
 	//监听键鼠事件
 	KeyboardAndMouseHandle KMH(SCREEN_WIDTH, SCREEN_HEIGHT,&defaultCamera);
 
@@ -281,10 +399,11 @@ int main(int argc, char** argv) {
 
 		//模型信息
 		std::vector<std::string> modleName = {
-			"obj/african_head/african_head.obj",
-			"obj/african_head/african_head_eye_inner.obj",
-			//"obj/diablo3_pose/diablo3_pose.obj",
-			"obj/floor.obj",
+			//"obj/african_head/african_head.obj",
+			//"obj/african_head/african_head_eye_inner.obj",
+			"obj/diablo3_pose/diablo3_pose.obj",
+			//"obj/floor.obj",
+			"obj/backgroundColorFloor.obj",
 			//"obj/floor1.obj",
 			//"obj/window.obj",
 		};
@@ -320,6 +439,10 @@ int main(int argc, char** argv) {
 		ColorVec* shadowTexture = new ColorVec[SHADOW_WIDTH * SHADOW_HEIGHT];
 		std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_HEIGHT, white);
 
+		//创建屏幕环境遮罩贴图
+		ColorVec* SSAOTexture = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
+		std::fill(SSAOTexture, SSAOTexture + SCREEN_HEIGHT * SCREEN_WIDTH, black);
+
 		// 启动背面剔除
 		enableFaceCulling = true;
 		enableFrontFaceCulling = false;
@@ -335,8 +458,17 @@ int main(int argc, char** argv) {
 		//float lightZ = radio * sin(angle * DegToRad);
 		//lightPos.x = lightX;
 		//lightPos.z = lightZ;
+
 		//绘制shadow map
 		drawShadowMap(models, shadowBuffer, shadowTexture);
+
+
+		Vec3f camPos(1.5, 0.8, 2);
+		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
+		camPos = camPos*0.8;
+		defaultCamera.setCamera(camPos, camCenter, up);
+		//绘制屏幕全局光照贴图
+		
 
 		//While application is running
 		while (KMH.SDL_Runing){
@@ -351,14 +483,10 @@ int main(int argc, char** argv) {
 			}
 			
 			//处理键鼠事件
-			KMH.getMouseKeyEven(NULL, deltaTime);
-
-			
-
-			
-			
+			KMH.getMouseKeyEven(NULL, deltaTime); 
+			drawSSAOTexture(models, zbuffer, SSAOTexture);
 			//根据shadow map绘制模型
-			draw(models, drawBuffer, shadowBuffer, zbuffer);
+			draw(models, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
 
 			//交换缓存
 			temp = drawBuffer;
@@ -366,9 +494,13 @@ int main(int argc, char** argv) {
 			showBuffer = temp;
 
 			//更新屏幕显示内容
-			window.refresh(showBuffer);
+			window.refresh(drawBuffer);
+
 #ifdef showShadow
 			shadow.refresh(shadowTexture);
+#endif
+#ifdef showSSAO
+			SSAO.refresh(SSAOTexture);
 #endif
 		}
 		delete[] zbuffer;
@@ -376,11 +508,16 @@ int main(int argc, char** argv) {
 		delete[] drawBuffer;
 		delete[] shadowTexture;
 		delete[] shadowBuffer;
+		delete[] SSAOTexture;
 	}
 	//Free resources and close SDL
 	window.close();
 #ifdef showShadow
 	shadow.close();
+#endif
+
+#ifdef showSSAO
+	SSAO.close();
 #endif
 	return 0;
 }
@@ -417,3 +554,23 @@ void drawWindowTGA() {
 }
 
 
+
+
+void drawFloorTGA() {
+	int imageH = 256;
+	int imageW = 256;
+	int midH = imageH / 2;
+	int midW = imageW / 2;
+	int lineW = 10;
+	int halfLineW = lineW / 2;
+	TGAImage frame(imageW, imageH, TGAImage::RGBA);
+	TGAColor frameColor(100, 30, 0, 255);
+
+	for (int i = 0; i < imageH; i++) {
+		for (int j = 0; j < imageW; j++) {
+			frame.set(i, j, frameColor);
+		}
+	}
+	frame.flip_vertically(); // to place the origin in the bottom left corner of the image
+	frame.write_tga_file("backgroundColorFloor_diffuse.tga");
+}

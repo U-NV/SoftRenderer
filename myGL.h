@@ -41,6 +41,8 @@ public:
 	Vec3f normal;
 	Vec2f uv;
 
+	Vec2i screen_coord;
+
 	double depth;
 	double recip_w;
 	//double light_recip_w;

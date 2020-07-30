@@ -270,12 +270,15 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
 			Vec3f weights = calculate_weights(screen_coords[0], screen_coords[1], screen_coords[2], P);
+			//weights = Vec3f(0.333, 0.3333, 0.33333);
+
 			int weight0_okay = weights.x > -EPSILON;
 			int weight1_okay = weights.y > -EPSILON;
 			int weight2_okay = weights.z > -EPSILON;
 			if (weight0_okay && weight1_okay && weight2_okay) {
 				int zbufferInd = P.x + P.y * width;
 				double frag_depth = interpolate_depth(screen_depths, weights);
+				
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
@@ -287,6 +290,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal, weights);
 					//temp.ndc_coord = interpolate(verInf[0]->ndc_coord, verInf[1]->ndc_coord, verInf[2]->ndc_coord,weights);
 					temp.depth = frag_depth;
+					temp.screen_coord.x = P.x;
+					temp.screen_coord.y = P.y;
 
 					//调用面元着色器
 					bool discard = shader.fragment(temp, color);

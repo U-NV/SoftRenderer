@@ -16,9 +16,9 @@ private:
 	float pitch =0;
 
 	Vec3f camUp = { 0, 1, 0 };
-	Vec3f camPos = { 0, 0, 3 };
+	Vec3f camPos = { 1, 0, 3 };
 	Vec3f camDir = { 0, 0, -1 };
-	Vec3f camTargetPos = { 0, 0, -1 };
+	Vec3f camTargetPos = { 0, 0, 0 };
 
 	Matrix ViewMatrix;
 	Matrix ProjectionMatrix;
