@@ -21,8 +21,8 @@ Vec3f center(0, 0, 0);
 Vec3f camDefaultPos(0, 0, 1);
 
 //颜色
-ColorVec backGroundColor(100, 30, 0x00, 0xFF);
-ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
+const ColorVec backGroundColor(100, 30, 0x00, 0xFF);
+const ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 
 //光源位置
 Vec3f lightPos(1, 3, 1);
@@ -63,10 +63,15 @@ struct Shader : public IShader {
 		clipPosLightSpace.w = std::max(0.000000001, clipPosLightSpace.w);
 		float light_recip_w = 1 / clipPosLightSpace.w;
 		Vec3f ndcLightSpace = proj<3>(clipPosLightSpace * light_recip_w);
-		//因为没有进行各种裁切，故这里进行clamp，防止数据溢出
-		ndcLightSpace.x = clamp(ndcLightSpace.x, -1.0, 1.0);
-		ndcLightSpace.y = clamp(ndcLightSpace.y, -1.0, 1.0);
-		ndcLightSpace.z = clamp(ndcLightSpace.z, -1.0, 1.0);
+		//因为没有进行各种裁切，故这里ndc坐标会溢出
+		//这里默认超出贴图的地方都可以受到光照，直接返回0
+		if (ndcLightSpace.x > 1.0 || ndcLightSpace.x < -1.0)return 0;
+		if (ndcLightSpace.y > 1.0 || ndcLightSpace.y < -1.0)return 0;
+		if (ndcLightSpace.z > 1.0 || ndcLightSpace.z < -1.0)return 0;
+		//ndcLightSpace.x = clamp(ndcLightSpace.x, -1.0, 1.0);
+		//ndcLightSpace.y = clamp(ndcLightSpace.y, -1.0, 1.0);
+		//ndcLightSpace.z = clamp(ndcLightSpace.z, -1.0, 1.0);
+
 		//变换到阴影贴图的范围
 		Vec3f shadowTextureCoords = viewport_transform(SHADOW_WIDTH, SHADOW_HEIGHT, ndcLightSpace);
 		//从缓存中得到最近的深度
@@ -139,7 +144,7 @@ struct Shader : public IShader {
 
 		
 		//设置阴影偏移
-		float bias = std::max(0.05 * (1.0 - diff), 0.01);
+		float bias = std::max(0.1 * (1.0 - diff), 0.005);
 		//计算该点在不在阴影区域
 		float isInShadow = inShadow(verInf.world_pos, bias);
 
@@ -255,11 +260,13 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 	}
 }
 
+//#define showShadow
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow window("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT);
-	SDLWindow shadow("shadow",SHADOW_WIDTH, SHADOW_HEIGHT);
-
+#ifdef showShadow
+	SDLWindow shadow("shadow", SHADOW_WIDTH, SHADOW_HEIGHT);
+#endif // showShadow
 	//监听键鼠事件
 	KeyboardAndMouseHandle KMH(SCREEN_WIDTH, SCREEN_HEIGHT,&defaultCamera);
 
@@ -274,9 +281,9 @@ int main(int argc, char** argv) {
 
 		//模型信息
 		std::vector<std::string> modleName = {
-			//"obj/african_head/african_head.obj",
-			//"obj/african_head/african_head_eye_inner.obj",
-			"obj/diablo3_pose/diablo3_pose.obj",
+			"obj/african_head/african_head.obj",
+			"obj/african_head/african_head_eye_inner.obj",
+			//"obj/diablo3_pose/diablo3_pose.obj",
 			"obj/floor.obj",
 			//"obj/floor1.obj",
 			//"obj/window.obj",
@@ -321,6 +328,16 @@ int main(int argc, char** argv) {
 		int timer = 0;
 		float angle = 0;
 		
+		//光源旋转
+		//angle += 10 * deltaTime;
+		//float radio = 2;
+		//float lightX = radio * cos(angle * DegToRad);
+		//float lightZ = radio * sin(angle * DegToRad);
+		//lightPos.x = lightX;
+		//lightPos.z = lightZ;
+		//绘制shadow map
+		drawShadowMap(models, shadowBuffer, shadowTexture);
+
 		//While application is running
 		while (KMH.SDL_Runing){
 			//计算deltaTime与fps
@@ -336,16 +353,9 @@ int main(int argc, char** argv) {
 			//处理键鼠事件
 			KMH.getMouseKeyEven(NULL, deltaTime);
 
-			//光源旋转
-			angle += 10 * deltaTime;
-			float radio = 2;
-			float lightX = radio * cos(angle * DegToRad);
-			float lightZ = radio * sin(angle * DegToRad);
-			lightPos.x = lightX;
-			lightPos.z = lightZ;
+			
 
-			//绘制shadow map
-			drawShadowMap(models, shadowBuffer, shadowTexture);
+			
 			
 			//根据shadow map绘制模型
 			draw(models, drawBuffer, shadowBuffer, zbuffer);
@@ -357,8 +367,9 @@ int main(int argc, char** argv) {
 
 			//更新屏幕显示内容
 			window.refresh(showBuffer);
-
+#ifdef showShadow
 			shadow.refresh(shadowTexture);
+#endif
 		}
 		delete[] zbuffer;
 		delete[] showBuffer;
@@ -368,7 +379,9 @@ int main(int argc, char** argv) {
 	}
 	//Free resources and close SDL
 	window.close();
+#ifdef showShadow
 	shadow.close();
+#endif
 	return 0;
 }
 
