@@ -9,8 +9,8 @@
 #include "SDLWindow.h"
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 1920/5;
-const int SCREEN_HEIGHT = 1080/5;
+const int SCREEN_WIDTH = 1920/2;
+const int SCREEN_HEIGHT = 1080/2;
 
 const int SHADOW_WIDTH = 2000, SHADOW_HEIGHT = 2000;
 //位置相关参数
@@ -229,7 +229,7 @@ struct skyboxShader : public IShader {
 		//std::cout << " maxDir:" << maxDir << std::endl;
 		if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
 		else maxDir *= 2;
-		float screen_coord[2];
+		double screen_coord[2];
 		for (int i = 0; i < 3; i++) {
 			pos[i] = (pos[i] + 1) * 0.5;
 		}
@@ -261,8 +261,9 @@ struct skyboxShader : public IShader {
 		}
 		screen_coord[0] = screen_coord[0] * skyboxSize.x;
 		screen_coord[1] = screen_coord[1] * skyboxSize.y;
-		
-		TGAColor cubeColor = skyboxFaces[maxDir].get(screen_coord[0], screen_coord[1]);
+		int x = clamp<int>(screen_coord[0], 0, skyboxSize.x);
+		int y = clamp<int>(screen_coord[1], 0, skyboxSize.y);
+		TGAColor cubeColor = skyboxFaces[maxDir].get(x, y);
 		//std::cout << "dir:" << pos << " maxDir:" << maxDir <<" uv:"<< screen_coord[0]<<","<< screen_coord[1]
 		//	<< " Color " << cubeColor[2]<<","<< cubeColor[1] << "," << cubeColor[0] << std::endl;
 		return cubeColor;
@@ -475,9 +476,9 @@ int main(int argc, char** argv) {
 
 		//模型信息
 		std::vector<std::string> modleName = {
-			//"obj/african_head/african_head.obj",
+			"obj/african_head/african_head.obj",
 			//"obj/african_head/african_head_eye_inner.obj",
-			"obj/diablo3_pose/diablo3_pose.obj",
+			//"obj/diablo3_pose/diablo3_pose.obj",
 			"obj/floor.obj",
 			//"obj/backgroundColorFloor.obj",
 			//"obj/floor1.obj",
@@ -527,6 +528,7 @@ int main(int argc, char** argv) {
 			
 			"skybox/top.tga",
 			"skybox/bottom.tga",
+
 			"skybox/front.tga",
 			"skybox/back.tga",
 		};
@@ -588,13 +590,14 @@ int main(int argc, char** argv) {
 			//清空zbuffer
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
+			drawSkybox(skyboxModle, skyboxFaces, drawBuffer, zbuffer);
 			//绘制屏幕全局光照贴图
-			drawSSAOTexture(models, zbuffer, SSAOTexture);
+			//drawSSAOTexture(models, zbuffer, SSAOTexture);
 
 			//根据shadow map和SSAO绘制模型
 			draw(models, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
 
-			drawSkybox(skyboxModle, skyboxFaces, drawBuffer, zbuffer);
+			
 
 			//交换缓存
 			temp = drawBuffer;

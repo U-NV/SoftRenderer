@@ -305,11 +305,14 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 							float rate = (frag_depth - fogStartPos) / fogRange;
 							rate = clamp(rate, 0.0f, 1.0f);
 
-							TGAColor deothColor(255, 255, 255, rate * 255);
+							//TGAColor deothColor(255, 255, 255, rate * 255);
 							//进行alpha混合
 							TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+							
+							color[3] = (1-rate) * 255;
 							color = blendColor(color, colorNow);
-							color = blendColor(deothColor, color);
+							
+							//color = blendColor(deothColor, color);
 						}
 						//写入绘制buffer
 						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
