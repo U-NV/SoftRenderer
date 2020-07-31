@@ -9,10 +9,10 @@
 #include "SDLWindow.h"
 
 //Screen dimension constants
-const int SCREEN_WIDTH = 1920/4;
-const int SCREEN_HEIGHT = 1080/4;
+const int SCREEN_WIDTH = 1920/5;
+const int SCREEN_HEIGHT = 1080/5;
 
-const int SHADOW_WIDTH = 2000/2, SHADOW_HEIGHT = 2000/2;
+const int SHADOW_WIDTH = 2000, SHADOW_HEIGHT = 2000;
 //位置相关参数
 Vec3f up(0, 1, 0);
 Vec3f right(1, 0, 0);
@@ -21,12 +21,13 @@ Vec3f center(0, 0, 0);
 Vec3f camDefaultPos(0, 0, 1);
 
 //颜色
-const ColorVec backGroundColor(100, 30, 0x00, 0xFF);
+const ColorVec ambientColor(30, 30, 30, 0xFF);
 const ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 const ColorVec black(0x00, 0x00, 0x00, 0xFF);
 
 //光源位置
-Vec3f lightPos(2, 3, -1);
+//Vec3f lightPos(2, 3, -1);//暗黑破坏神光源
+Vec3f lightPos(2.2, 3.5, 2);//黑人头
 
 //模型指针
 Model* model;
@@ -130,7 +131,7 @@ struct Shader : public IShader {
 		//环境光
 		//float saaoAmbient = SAAOTexture[SCREEN_WIDTH * verInf.screen_coord.y + verInf.screen_coord.x].x / 255.0f;
 		float ambient = SAAOTexture[SCREEN_WIDTH * verInf.screen_coord.y + verInf.screen_coord.x].x / 255.0f;
-		ambient = clamp(ambient, 0.2f, 1.0f);
+		ambient = clamp(ambient, 0.2f, 0.7f);
 		//float ambient = 1;
 		Vec3f vertPos = verInf.world_pos;
 		
@@ -202,9 +203,79 @@ struct SSAOShader : public IShader {
 	}
 };
 
-float max_elevation_angle(double* zbuffer, float radio,float near,float far, Vec2f& p, Vec2f& dir) {
+struct skyboxShader : public IShader {
+	TGAImage* skyboxFaces;
+	Vec2i skyboxSize;
+	skyboxShader(TGAImage* skyboxFaces) {
+		this->skyboxFaces = skyboxFaces;
+		this->skyboxSize = 
+			Vec2i(skyboxFaces[0].get_width(),skyboxFaces[0].get_height());
+	}
+	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
+		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
+		faceVer.world_pos = model->vert(iface, nthvert);
+		ViewMatrix[0][3] = 0;
+		ViewMatrix[1][3] = 0;
+		ViewMatrix[2][3] = 0;
+		//ViewMatrix[3][3] = 0;
+		faceVer.clip_coord =ProjectionMatrix*ViewMatrix * gl_Vertex;
+		faceVer.clip_coord.z = faceVer.clip_coord.w;
+	}
+	TGAColor CubeMap(Vec3f pos) {
+		//std::cout << "dir:" << pos;
+		int maxDir = fabs(pos.x) > fabs(pos.y) ? 0 : 1;
+		//std::cout << " maxDir:" << maxDir << std::endl;
+		maxDir = fabs(pos[maxDir]) > fabs(pos.z) ? maxDir : 2;
+		//std::cout << " maxDir:" << maxDir << std::endl;
+		if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
+		else maxDir *= 2;
+		float screen_coord[2];
+		for (int i = 0; i < 3; i++) {
+			pos[i] = (pos[i] + 1) * 0.5;
+		}
+		switch (maxDir) {
+			case 0://+x
+				screen_coord[0] = 1 - pos.z;
+				screen_coord[1] = 1 - pos.y;
+				break;
+			case 1://-x
+				screen_coord[0] = pos.z;
+				screen_coord[1] = 1-pos.y;
+				break;
+			case 2://+y
+				screen_coord[0] = 1-pos.x;
+				screen_coord[1] = 1-pos.z;
+				break;
+			case 3://-y
+				screen_coord[0] = 1 - pos.x;
+				screen_coord[1] = pos.z;
+				break;
+			case 4://+z
+				screen_coord[0] = pos.x;
+				screen_coord[1] = 1 - pos.y;
+				break;
+			case 5://-z
+				screen_coord[0] = 1 - pos.x;
+				screen_coord[1] = 1 - pos.y;
+				break;
+		}
+		screen_coord[0] = screen_coord[0] * skyboxSize.x;
+		screen_coord[1] = screen_coord[1] * skyboxSize.y;
+		
+		TGAColor cubeColor = skyboxFaces[maxDir].get(screen_coord[0], screen_coord[1]);
+		//std::cout << "dir:" << pos << " maxDir:" << maxDir <<" uv:"<< screen_coord[0]<<","<< screen_coord[1]
+		//	<< " Color " << cubeColor[2]<<","<< cubeColor[1] << "," << cubeColor[0] << std::endl;
+		return cubeColor;
+	}
+	virtual bool fragment(VerInf verInf, TGAColor& color) {
+		color = CubeMap(verInf.world_pos);
+		return false;
+	}
+};
+
+float max_elevation_angle(double* zbuffer, float radio, float near, float far, Vec2f& p, Vec2f& dir) {
 	float maxangle = 0;
-	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH],near,far)/ far;
+	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far) / far;
 	//double orgZ = zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH];
 	for (float t = 0.; t < radio; t += 1.) {
 		Vec2f cur = p + dir * t;
@@ -212,7 +283,7 @@ float max_elevation_angle(double* zbuffer, float radio,float near,float far, Vec
 
 		float distance = (p - cur).norm();
 		//if (distance < 1.f) continue;
-		double nearZ = LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far)/ far;
+		double nearZ = LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far) / far;
 		//double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
 		float elevation = nearZ - orgZ;
 		//if (elevation >= 0.2) continue;
@@ -226,16 +297,8 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	std::fill(SSAOTexture, SSAOTexture + SCREEN_WIDTH * SCREEN_HEIGHT, white);
 
-	//计算MVP矩阵
-	//首先执行缩放，接着旋转，最后才是平移
-	//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
-
 	float far = defaultCamera.getFar();
 	float near = defaultCamera.getNear();
-	//defaultCamera.setClipPlane(1,6);
-	ViewMatrix = defaultCamera.getViewMatrix();
-	ProjectionMatrix = defaultCamera.getProjMatrix();
-	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
 	//启动正面剔除
 	enableFaceCulling = true;
@@ -251,7 +314,7 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 			}
 			triangle(faceVer, shader, //传入顶点数据和shader
 				SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
-				defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
+				near, far, //传入透视远近平面用于裁切和线性zbuffer
 				zbuffer, SSAOTexture,//传入绘制buffer
 				false,//是否绘制线框模型
 				false//是否绘雾
@@ -282,7 +345,7 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 			}
 			//std::cout << total << std::endl;
 			total /= halfPI * samplingDir;
-			total = pow(total, 2000.f);
+			total = pow(total, 1000.f);
 			SSAOTexture[id].x = total * 255;
 			SSAOTexture[id].y = total * 255;
 			SSAOTexture[id].z = total * 255;
@@ -338,17 +401,30 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	enableFrontFaceCulling = false;
 }
 
+void drawSkybox(Model& skyboxModle,TGAImage* skyboxFaces,ColorVec* drawBuffer, double* zbuffer) {
+	enableFaceCulling = false;
+	//绘制模型的三角面片
+	skyboxShader skyboxShader(skyboxFaces);
+	VerInf faceVer[3];
+	model = &skyboxModle;
+	for (int i = 0; i < model->nfaces(); i++) {
+		for (int j = 0; j < 3; j++) {
+			skyboxShader.vertex(i, j, faceVer[j]);
+		}
+		triangle(faceVer, skyboxShader, //传入顶点数据和shader
+			SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+			defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
+			zbuffer, drawBuffer,//传入绘制buffer
+			false,//是否绘制线框模型
+			false//是否绘雾
+		);
+	}
+	enableFaceCulling = true;
+}
+
 void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer, ColorVec* SAAOTexture) {
 	//清空drawbuffer和zbuffer，绘制新的画面
-	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
-	std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, backGroundColor);
-
-	//计算MVP矩阵
-	//首先执行缩放，接着旋转，最后才是平移
-	//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
-	ViewMatrix = defaultCamera.getViewMatrix();
-	ProjectionMatrix = defaultCamera.getProjMatrix();
-	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
@@ -374,7 +450,7 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 
 
 //#define showShadow
-#define showSSAO
+//#define showSSAO
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow window("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -402,8 +478,8 @@ int main(int argc, char** argv) {
 			//"obj/african_head/african_head.obj",
 			//"obj/african_head/african_head_eye_inner.obj",
 			"obj/diablo3_pose/diablo3_pose.obj",
-			//"obj/floor.obj",
-			"obj/backgroundColorFloor.obj",
+			"obj/floor.obj",
+			//"obj/backgroundColorFloor.obj",
 			//"obj/floor1.obj",
 			//"obj/window.obj",
 		};
@@ -441,7 +517,23 @@ int main(int argc, char** argv) {
 
 		//创建屏幕环境遮罩贴图
 		ColorVec* SSAOTexture = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
-		std::fill(SSAOTexture, SSAOTexture + SCREEN_HEIGHT * SCREEN_WIDTH, black);
+		std::fill(SSAOTexture, SSAOTexture + SCREEN_HEIGHT * SCREEN_WIDTH, ambientColor);
+
+		//载入天空盒
+		Model skyboxModle("obj/skybox.obj");
+		std::vector<const char*> skyboxFaceName = {
+			"skybox/left.tga",
+			"skybox/right.tga",
+			
+			"skybox/top.tga",
+			"skybox/bottom.tga",
+			"skybox/front.tga",
+			"skybox/back.tga",
+		};
+		TGAImage* skyboxFaces = new TGAImage[6];
+		for (int i = 0; i < 6; i++) {
+			skyboxFaces[i].read_tga_file(skyboxFaceName[i]);
+		}
 
 		// 启动背面剔除
 		enableFaceCulling = true;
@@ -458,16 +550,14 @@ int main(int argc, char** argv) {
 		//float lightZ = radio * sin(angle * DegToRad);
 		//lightPos.x = lightX;
 		//lightPos.z = lightZ;
-
+		
 		//绘制shadow map
 		drawShadowMap(models, shadowBuffer, shadowTexture);
-
 
 		Vec3f camPos(1.5, 0.8, 2);
 		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
 		camPos = camPos*0.8;
 		defaultCamera.setCamera(camPos, camCenter, up);
-		//绘制屏幕全局光照贴图
 		
 
 		//While application is running
@@ -484,9 +574,27 @@ int main(int argc, char** argv) {
 			
 			//处理键鼠事件
 			KMH.getMouseKeyEven(NULL, deltaTime); 
+
+			//计算MVP矩阵
+			//首先执行缩放，接着旋转，最后才是平移
+			//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
+			ViewMatrix = defaultCamera.getViewMatrix();
+			ProjectionMatrix = defaultCamera.getProjMatrix();
+			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+
+			//清空绘图区域
+			std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, black);
+			
+			//清空zbuffer
+			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
+
+			//绘制屏幕全局光照贴图
 			drawSSAOTexture(models, zbuffer, SSAOTexture);
-			//根据shadow map绘制模型
+
+			//根据shadow map和SSAO绘制模型
 			draw(models, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
+
+			drawSkybox(skyboxModle, skyboxFaces, drawBuffer, zbuffer);
 
 			//交换缓存
 			temp = drawBuffer;

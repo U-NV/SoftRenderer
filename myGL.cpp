@@ -305,7 +305,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 							float rate = (frag_depth - fogStartPos) / fogRange;
 							rate = clamp(rate, 0.0f, 1.0f);
 
-							TGAColor deothColor(100, 30, 0x00, rate * 255);
+							TGAColor deothColor(255, 255, 255, rate * 255);
 							//½øÐÐalpha»ìºÏ
 							TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
 							color = blendColor(color, colorNow);

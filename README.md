@@ -17,12 +17,12 @@ qe上下
 MVP矩阵变换  
 自定义shader  
 视锥剔除/齐次裁切/背面剔除  
+深度测试
 摄像机运动  
 obj模型导入  
-透视矫正  
-blinn phong 光照模型  
-alpha blending  
-shadow Map  
+透明混合  
+Blinn–Phong反射模型  
+阴影贴图（Shadow mapping）
 
 >数学库、贴图、模型导入的代码 与 所有的obj模型来自
 https://github.com/ssloy/tinyrenderer  
