@@ -23,6 +23,8 @@ obj模型导入
 透明混合  
 Blinn–Phong反射模型  
 阴影贴图（Shadow mapping）
+简单的SSAO
+天空盒
 
 >数学库、贴图、模型导入的代码 与 所有的obj模型来自
 https://github.com/ssloy/tinyrenderer  
