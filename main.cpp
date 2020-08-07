@@ -12,7 +12,7 @@
 const int SCREEN_WIDTH = 600;
 const int SCREEN_HEIGHT = 300;
 
-const int SHADOW_WIDTH = 500, SHADOW_HEIGHT = 500;
+const int SHADOW_WIDTH = 100, SHADOW_HEIGHT = 100;
 //位置相关参数
 Vec3f up(0, 1, 0);
 Vec3f right(1, 0, 0);
@@ -21,16 +21,31 @@ Vec3f center(0, 0, 0);
 Vec3f camDefaultPos(0, 0, 1);
 
 //颜色
-const ColorVec ambientColor(128, 128, 128, 0xFF);
-const ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
-const ColorVec black(0x00, 0x00, 0x00, 0xFF);
+const Vec4f ambientColor(1, 1, 1, 1);
+const Vec4f white(1, 1, 1, 1);
+const Vec4f black(0, 0, 0, 1);
 
 //光源位置
-Vec3f lightPos(2, 3, -1);//暗黑破坏神光源
+Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
 //Vec3f lightPos(2.2, 3.5, 2);//黑人头
 
+struct Light
+{
+	Vec3f position;
+	Vec3f ambient;
+	Vec3f diffuse;
+	Vec3f specular;
+	float constant;
+	float linear;
+	float quadratic;
+};
+
+Light testLight;
+//testLight.position =
+
+
 //模型指针
-Model* model;
+Model* modelNow;
 
 //计数器
 clock_t lastFrame = 0;
@@ -53,13 +68,13 @@ struct Shader : public IShader {
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
-		faceVer.uv = model->uv(iface, nthvert);
+		faceVer.uv = modelNow->uv(iface, nthvert);
 		//法线变换
-		//faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(model->normal(iface, nthvert), 0.0));
+		faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(modelNow->normal(iface, nthvert), 0.0f));
 		//世界坐标
-		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(model->vert(iface, nthvert)));
+		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(modelNow->vert(iface, nthvert)));
 		//裁切坐标
-		faceVer.clip_coord = MVP * embed<4>(model->vert(iface, nthvert));
+		faceVer.clip_coord = MVP * embed<4>(modelNow->vert(iface, nthvert));
 	}
 
 	inline float inShadow(Vec3f& world_pos, float& bias) {
@@ -96,72 +111,66 @@ struct Shader : public IShader {
 		//return 0;
 	}
 	
-	virtual bool fragment(VerInf verInf, TGAColor& color) {
+	virtual bool fragment(VerInf& verInf, Vec4f& color) {
 		//插值uv
 		Vec2f uv = verInf.uv;
+		
+		//设置光照
+		float lightPower = 5;
+		Vec4f lightColor(1, 1, 1, 1);
+		Vec4f ambientColor(1,1, 1, 1);
+		Vec4f specColor(1, 1, 1, 1);
+		TGAColor tgaDiff = modelNow->diffuse(uv);
+		Vec4f modleDiffColor(tgaDiff.bgra[2] / 255.f, tgaDiff.bgra[1] / 255.f, tgaDiff.bgra[0] / 255.f, 1);
 
 		//插值法向量
 		//Vec3f normal = verInf.normal;
 
 		//使用法线贴图
-		Vec3f normal = model->normal(uv);
-		{
-		//Vec3f bn = (varying_nrm * weights).normalize();
-		//mat<3, 3, float> A;
-		//A[0] = ndc_tri.col(1) - ndc_tri.col(0);
-		//A[1] = ndc_tri.col(2) - ndc_tri.col(0);
-		//A[2] = bn;
+		Vec3f normal = modelNow->normal(uv);
+		normal.normalize();
+		//设置阴影偏移
+		//float bias = std::max(0.1 * (1.0 - diff), 0.005);
+		float bias = 0.11;
+		//计算该点在不在阴影区域
+		float isInShadow = inShadow(verInf.world_pos, bias);
 
-		//mat<3, 3, float> AI = A.invert();
-		//Vec3f i = AI * Vec3f(varying_uv[0][1] - varying_uv[0][0], varying_uv[0][2] - varying_uv[0][0], 0);
-		//Vec3f j = AI * Vec3f(varying_uv[1][1] - varying_uv[1][0], varying_uv[1][2] - varying_uv[1][0], 0);
-
-		//mat<3, 3, float> B;
-		//B.set_col(0, i.normalize());
-		//B.set_col(1, j.normalize());
-		//B.set_col(2, bn);
-		}
-
-		//设置光照
-		float lightPower = 16;
-		//环境光
-		float ambient = SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y).bgra[0] / 255.0f;
-		//float ambient = 0.3f;
-		ambient = clamp(ambient, 0.2f, 0.7f);
-		//float ambient = 1;
-		Vec3f vertPos = verInf.world_pos;
 		
+
+		//环境光
+		//float ambient = SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y).x;
+		float ambient = 0.5f;
+		ambient = clamp(ambient, 0.2f, 0.7f);
+		ambientColor = colorMulit(ambientColor, modleDiffColor * ambient);
+		Vec3f vertPos = verInf.world_pos;
+
 		//衰减
 		Vec3f lightDir = (lightPos - vertPos);
 		float dis = lightDir.norm();
 		float recip_dis = 1.0f / dis;
 		lightDir = lightDir * recip_dis;
+		recip_dis *= recip_dis;
+
 
 		//漫反射
-		float diff = clamp<float>(std::abs(lightDir * (-1) * normal), 0, 1);
+		float diff = std::max(normal*lightDir,0.0f);
+		Vec4f diffColor = colorMulit(lightColor, modleDiffColor * diff * recip_dis * lightPower * (1 - isInShadow));
+		//std::cout << "diff:" << diff << std::endl;
 
-		//镜面反射
+		//镜面反射强度
 		Vec3f viewDir = (defaultCamera.getPos() - vertPos).normalize();
 		Vec3f hafe = (lightDir + viewDir).normalize();
-		float spec = clamp<float>(std::abs(normal * hafe), 0, 1);
+		float specPow = modelNow->specular(uv);
+		specPow = specPow < 1 ? 256 : specPow;
+		float spec = pow(std::max(normal * hafe,0.0f), specPow);
+		//计算反射颜色
+		specColor = colorMulit(specColor, modleDiffColor * spec * recip_dis * lightPower * (1 - isInShadow));
 
-		spec = pow(spec, 1);
-		//设置阴影偏移
-		float bias = std::max(0.1 * (1.0 - diff), 0.005);
-		//计算该点在不在阴影区域
-		float isInShadow = inShadow(verInf.world_pos, bias);
-		//isInShadow = 1;
-		TGAColor c = model->diffuse(uv);
-		//TGAColor c = TGAColor(100,100,100,255);
-		color = c;
-		for (int i = 0; i < 3; i++) {
-			float light = (1 - isInShadow) * (1 * diff + 1* spec ) * lightPower * recip_dis * recip_dis;
-			//float light = (1 * diff + 1 * spec) * lightPower;
-			float rate = clamp<float>(ambient + light,0,10);
-			float tempColor = c[i] * rate;
-			color[i] = clamp<int>(tempColor,0,255);
-		}
 
+		color = ambientColor + diffColor + specColor;
+		color = color / 2;
+		color.w = 1;
+		//std::cout << "color:" << color << std::endl;
 		return false;
 	}
 };
@@ -172,29 +181,29 @@ struct DepthShader : public IShader {
 		LightSpaceMatrix = lightSpaceMatrix;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
-		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
+		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
 		faceVer.clip_coord = *LightSpaceMatrix * ModelMatrix  * gl_Vertex; 
 	}
 
-	virtual bool fragment(VerInf verInf, TGAColor& color) {
+	virtual bool fragment(VerInf& verInf, Vec4f& color) {
 		//if (lightCamera.getProjectMode()) {
 		//	float far = lightCamera.getFar();
 		//	float near = lightCamera.getNear();
 		//	verInf.depth = LinearizeDepth(verInf.depth,near, far)/ far;
 		//}
-		color = TGAColor(255, 255, 255,255) * verInf.depth;
+		color = Vec4f(1, 1, 1,1) * verInf.depth;
 		return false;
 	}
 };
 
 struct SSAOShader : public IShader {
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
-		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
+		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
 		faceVer.clip_coord = MVP * gl_Vertex;
 	}
 
-	virtual bool fragment(VerInf verInf, TGAColor& color) {
-		color = TGAColor(0, 0, 0,255);
+	virtual bool fragment(VerInf& verInf, Vec4f& color) {
+		color = Vec4f(0, 0, 0,1);
 		return false;
 	}
 };
@@ -205,8 +214,8 @@ struct skyboxShader : public IShader {
 		this->skyboxFaces = skyboxFaces;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
-		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
-		faceVer.world_pos = model->vert(iface, nthvert);
+		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
+		faceVer.world_pos = modelNow->vert(iface, nthvert);
 		ViewMatrix[0][3] = 0;
 		ViewMatrix[1][3] = 0;
 		ViewMatrix[2][3] = 0;
@@ -215,7 +224,7 @@ struct skyboxShader : public IShader {
 		//faceVer.clip_coord.z = faceVer.clip_coord.w;
 	}
 
-	virtual bool fragment(VerInf verInf, TGAColor& color) {
+	virtual bool fragment(VerInf& verInf, Vec4f& color) {
 		color = CubeMap(skyboxFaces, verInf.world_pos);
 		return false;
 	}
@@ -292,8 +301,8 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 	for (int m = 0; m < models.size(); m++) {
 		SSAOShader shader;
 		VerInf faceVer[3];
-		model = &models[m];
-		for (int i = 0; i < model->nfaces(); i++) {
+		modelNow = &models[m];
+		for (int i = 0; i < modelNow->nfaces(); i++) {
 			for (int j = 0; j < 3; j++) {
 				shader.vertex(i, j, faceVer[j]);
 			}
@@ -329,7 +338,7 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 		dirList[i] = Vec2f(cos(a), sin(a));
 	}
 	Vec2f posNow(0, 0);
-	ColorVec temp;
+	Vec4f temp;
 	for (posNow.x = 0; posNow.x < SCREEN_WIDTH; posNow.x++) {
 		for (posNow.y = 0; posNow.y < SCREEN_HEIGHT; posNow.y++) {
 			int id = posNow.x + posNow.y * SCREEN_WIDTH;
@@ -389,8 +398,8 @@ void drawShadowMap(std::vector<Model>& models, const ViewPort& port, double* sha
 	for (int m = 0; m < models.size(); m++) {
 		DepthShader depthshader(&lightSpaceMatrix);
 		VerInf faceVer[3];
-		model = &models[m];
-		for (int i = 0; i < model->nfaces(); i++) {
+		modelNow = &models[m];
+		for (int i = 0; i < modelNow->nfaces(); i++) {
 			for (int j = 0; j < 3; j++) {
 				depthshader.vertex(i, j, faceVer[j]);
 			}
@@ -415,8 +424,8 @@ void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,
 	//绘制模型的三角面片
 	skyboxShader skyboxShader(skyboxFaces);
 	VerInf faceVer[3];
-	model = &skyboxModle;
-	for (int i = 0; i < model->nfaces(); i++) {
+	modelNow = &skyboxModle;
+	for (int i = 0; i < modelNow->nfaces(); i++) {
 		for (int j = 0; j < 3; j++) {
 			skyboxShader.vertex(i, j, faceVer[j]);
 		}
@@ -446,8 +455,8 @@ void draw(std::vector<Model>& models, const ViewPort& port, const ViewPort& shad
 	for (int m = 0; m < models.size(); m++) {
 		Shader shader(&lightSpaceMatrix, &shadowPort, shadowBuffer, SAAOTexture);
 		VerInf faceVer[3];
-		model = &models[m];
-		for (int i = 0; i < model->nfaces(); i++) {
+		modelNow = &models[m];
+		for (int i = 0; i < modelNow->nfaces(); i++) {
 			for (int j = 0; j < 3; j++) {
 				shader.vertex(i, j, faceVer[j]);
 			}
@@ -562,17 +571,7 @@ int main(int argc, char** argv) {
 		int timer = 0;
 		float angle = 0;
 		
-		//光源旋转
-		//angle += 10 * deltaTime;
-		//float radio = 2;
-		//float lightX = radio * cos(angle * DegToRad);
-		//float lightZ = radio * sin(angle * DegToRad);
-		//lightPos.x = lightX;
-		//lightPos.z = lightZ;
 		
-		//绘制shadow map
-		
-		drawShadowMap(models, shadowViewPort, shadowBuffer, shadowTexture);
 
 		Vec3f camPos(1.5, 0.8, 2);
 		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
@@ -582,6 +581,18 @@ int main(int argc, char** argv) {
 
 		//While application is running
 		while (KMH.SDL_Runing){
+			//光源旋转
+			angle += 60 * deltaTime;
+			float radio = 2;
+			float lightX = radio * cos(angle * DegToRad);
+			float lightZ = radio * sin(angle * DegToRad);
+			lightPos.x = lightX;
+			lightPos.z = lightZ;
+			lightPos.y = 2;
+			//std::cout << "lightPos:" << lightPos << std::endl;
+			//绘制shadow map
+			drawShadowMap(models, shadowViewPort, shadowBuffer, shadowTexture);
+
 			//计算deltaTime与fps
 			timer++;
 			clock_t currentFrame = clock();

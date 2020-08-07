@@ -130,6 +130,14 @@ template <typename T> vec<3, T> cross(vec<3, T> a, vec<3, T> b) {
                      a.x * b.y - a.y * b.x);
 }
 
+template <typename T> vec<4, T> colorMulit(vec<4, T> a, vec<4, T> b) {
+    return vec<4, T>(
+        a.x * b.x,
+        a.y * b.y,
+        a.z * b.z,
+        a.w * b.w);
+}
+
 template <size_t DIM, typename T> std::ostream& operator<<(std::ostream& out, vec<DIM, T>& v) {
     for (unsigned int i = 0; i < DIM; i++) {
         out << v[i] << " ";
@@ -257,6 +265,10 @@ std::ostream& operator<<(std::ostream& out, mat<DimRows, DimCols, T>& m) {
     return out;
 }
 
+
+
+
+
 /////////////////////////////////////////////////////////////////////////////////
 
 typedef vec<2, float> Vec2f;
@@ -264,7 +276,6 @@ typedef vec<2, int>   Vec2i;
 typedef vec<3, float> Vec3f;
 typedef vec<3, int>   Vec3i;
 typedef vec<4, float> Vec4f;
-typedef vec<4, unsigned char> ColorVec;
 typedef mat<4, 4, float> Matrix;
 
 

@@ -57,7 +57,7 @@ public:
 struct IShader {
     virtual ~IShader();
     virtual void vertex(int iface, int nthvert, VerInf& faceVer) = 0;
-    virtual bool fragment(VerInf verInf, TGAColor& color) = 0;
+    virtual bool fragment(VerInf& verInf, Vec4f& color) = 0;
 };
 
 //模型矩阵
@@ -93,19 +93,19 @@ public:
 	Frame(int w,int h);
 	~Frame();
 	void setPixel(int& x, int& y, TGAColor& color);
-	void setPixel(int& x, int& y, ColorVec& color);
+	void setPixel(int& x, int& y, Vec4f& color);
 
-	TGAColor getPixel(int& x, int& y);
-	void fill(const ColorVec& defaultColor);
+	Vec4f* getPixel(int& x, int& y);
+	void fill(const Vec4f& defaultColor);
 	int f_width;
 	int f_height;
 private:
-	ColorVec* buffer;
+	Vec4f* buffer;
 };
 
 
 //立方贴图
-TGAColor CubeMap(TGAImage* skyboxFaces, Vec3f pos);
+Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f pos);
 
 
 //绘制三角面片

@@ -77,8 +77,17 @@ void SDLWindow::refresh(Frame* buffer)
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int bufferInd = x + y * width;
-			TGAColor* temp = &buffer->getPixel(x, y);
-			SDL_SetRenderDrawColor(gRenderer, temp->bgra[2], temp->bgra[1], temp->bgra[0], temp->bgra[3]);
+			Vec4f* temp = buffer->getPixel(x, y);
+			//SDL_SetRenderDrawColor(gRenderer,
+			//	(temp->x - int(temp->x)) * 255,
+			//	(temp->y - int(temp->y)) * 255, 
+			//	(temp->z - int(temp->z)) * 255, 
+			//	(temp->w - int(temp->w)) * 255);
+			SDL_SetRenderDrawColor(gRenderer,
+int(temp->x * 255),
+int(temp->y * 255), 
+int(temp->z * 255), 
+int(temp->w * 255));
 			SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
 		}
 	}

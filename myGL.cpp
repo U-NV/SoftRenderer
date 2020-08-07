@@ -36,7 +36,7 @@ inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& f
 	return result;
 }
 
-inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, ColorVec* drawBuffer) {
+inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, Vec4f* drawBuffer) {
 	int bufferInd = x + y * 600;
 	drawBuffer[bufferInd].x = color[2];
 	drawBuffer[bufferInd].y = color[1];
@@ -44,8 +44,8 @@ inline void setPixelBuffer(const int& x, const  int& y, const int& width, const 
 	drawBuffer[bufferInd].w = color[3];
 }
 
-inline TGAColor blendColor(TGAColor& newColor, TGAColor& oldColor) {
-	float alpha = newColor[3] / 255.0f;
+inline Vec4f blendColor(Vec4f& newColor, Vec4f& oldColor) {
+	float alpha = newColor.z;
 	newColor = newColor * alpha + oldColor * (1 - alpha);
 	return newColor;
 }
@@ -272,7 +272,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	}
 
 	Vec2i P(0, 0);
-	TGAColor color;
+	Vec4f color;
 	VerInf temp;
 	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
@@ -305,19 +305,19 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 					//调用面元着色器
 					bool discard = shader.fragment(temp, color);
 					if (!discard) {
-						if (fog) {
-							frag_depth = LinearizeDepth(frag_depth, near, far) / far;
-							float fogRange = 0.3;
-							float fogStartPos = 1 - fogRange;
-							float rate = (frag_depth - fogStartPos) / fogRange;
-							rate = clamp(rate, 0.0f, 1.0f);
+						//if (fog) {
+						//	frag_depth = LinearizeDepth(frag_depth, near, far) / far;
+						//	float fogRange = 0.3;
+						//	float fogStartPos = 1 - fogRange;
+						//	float rate = (frag_depth - fogStartPos) / fogRange;
+						//	rate = clamp(rate, 0.0f, 1.0f);
 
-							
-							color[3] = (1 - rate) * 255;
-						}
+						//	
+						//	color[3] = (1 - rate) * 255;
+						//}
 						//进行alpha混合
-						TGAColor colorNow = drawBuffer->getPixel(P[0], P[1]);//(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
-						color = blendColor(color, colorNow);
+						//Vec4f colorNow = drawBuffer->getPixel(P[0], P[1]);//(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+						//color = blendColor(color, colorNow);
 						//写入绘制buffer
 						drawBuffer->setPixel(P[0], P[1], color);
 						//setPixelBuffer(P[0], P[1], port.v_width, port.v_height, color, drawBuffer);
@@ -346,7 +346,7 @@ void triangle(VerInf* vertexs, IShader& shader,
 	/* perspective division */
 	for (int i = 0; i < clipingVertexs.size(); i++) {
 		clipingVertexs[i].recip_w = 1.0f / clipingVertexs[i].clip_coord.w;
-		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord * clipingVertexs[i].recip_w);
+		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord) * clipingVertexs[i].recip_w;
 	}
 
 	int n = clipingVertexs.size() - 3 + 1;
@@ -500,7 +500,7 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	return projection;
 }
 
-TGAColor CubeMap(TGAImage* skyboxFaces, Vec3f pos) {
+Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f pos) {
 	int maxDir = fabs(pos.x) > fabs(pos.y) ? 0 : 1;
 	maxDir = fabs(pos[maxDir]) > fabs(pos.z) ? maxDir : 2;
 	if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
@@ -545,7 +545,7 @@ TGAColor CubeMap(TGAImage* skyboxFaces, Vec3f pos) {
 	TGAColor cubeColor = skyboxFaces[maxDir].get(int(screen_coord[0]), int(screen_coord[1]));
 	//std::cout << "dir:" << pos << " maxDir:" << maxDir <<" uv:"<< screen_coord[0]<<","<< screen_coord[1]
 	//	<< " Color " << cubeColor[2]<<","<< cubeColor[1] << "," << cubeColor[0] << std::endl;
-	return cubeColor;
+	return Vec4f(cubeColor.bgra[2]/255.f, cubeColor.bgra[1] / 255.f, cubeColor.bgra[0] / 255.f, cubeColor.bgra[3] / 255.f);
 }
 
 Vec3f ViewPort::transform(Vec3f& ndc_coord)const
@@ -562,7 +562,7 @@ Frame::Frame(int w, int h)
 {
 	f_width = w;
 	f_height = h;
-	buffer = new ColorVec[f_width * f_height];
+	buffer = new Vec4f[f_width * f_height];
 }
 
 Frame::~Frame()
@@ -578,7 +578,7 @@ void Frame::setPixel(int& x, int& y, TGAColor& color)
 	buffer[bufferInd].w = color[3];
 }
 
-void Frame::setPixel(int& x, int& y, ColorVec& color)
+void Frame::setPixel(int& x, int& y, Vec4f& color)
 {
 	int bufferInd = x + y * f_width;
 	buffer[bufferInd].x = color.x;
@@ -587,13 +587,13 @@ void Frame::setPixel(int& x, int& y, ColorVec& color)
 	buffer[bufferInd].w = color.w;
 }
 
-TGAColor Frame::getPixel(int& x, int& y) {
+Vec4f* Frame::getPixel(int& x, int& y) {
 	int bufferId = x + y * f_width;
-	return TGAColor(buffer[bufferId].x, buffer[bufferId].y, buffer[bufferId].z, buffer[bufferId].w);
+	return &buffer[bufferId];
 }
 
-void Frame::fill(const ColorVec& defaultColor)
+void Frame::fill(const Vec4f& defaultColor)
 {
 	std::fill(buffer, buffer + f_width * f_height, defaultColor);
 }
-;
+
