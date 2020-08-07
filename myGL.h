@@ -21,6 +21,8 @@ extern Matrix lightSpaceMatrix;
 extern bool enableFaceCulling;
 extern bool enableFrontFaceCulling;
 
+extern bool enableZTest;
+extern bool enableZWrite;
 //สýัง
 template <typename T>
 inline T lerp(T a, T b, double rate) {

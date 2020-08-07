@@ -11,6 +11,10 @@ Matrix lightSpaceMatrix;
 bool enableFaceCulling;
 bool enableFrontFaceCulling;
 
+
+bool enableZTest;
+bool enableZWrite;
+
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
 
@@ -93,17 +97,19 @@ void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, ColorV
 }
 
 inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
-	/* 建立向量 b-a， c-a
-		由于在ndc坐标系中，实现方向为（0，0，1）
-		故cross(b-a, c-a)*(0,0,1)只会保留cross(b-a, c-a).z
-		令signed_area = cross(b-a, c-a).z 计算背面剔除
+	/* 建立向量 b-a， a-c
+		由于在ndc坐标系中，视线方向为（0，0，1）
+		故cross(b-a, a-c)*(0,0,1)只会保留cross(b-a, a-c).z
+		令signed_area = cross(b-a, a-c).z 计算背面剔除
 	*/
-
-	float signed_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+	//Vec3f A = a - c;
+	//Vec3f B = b - c;
+	//float signed_area = cross(B,A).z;
+	float signed_area = (b.x - c.x) * (a.y - c.y) - (b.y - c.y) * (a.x - c.x);
 	if(enableFrontFaceCulling)
-		return signed_area > 0;
+		return signed_area < 0;
 	else
-		return signed_area <= 0;
+		return signed_area >= 0;
 }
 void draw2DFrame(VerInf** vertexs, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
 	Vec2i screen_coords[3];
@@ -161,6 +167,7 @@ inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) 
 		return false;
 	if (v2.y > 1 || v2.y < -1)
 		return false;
+
 	if (v3.x > 1 || v3.x < -1)
 		return false;
 	if (v3.y > 1 || v3.y < -1)
@@ -213,6 +220,7 @@ inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
 }
 std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const VerInf& v3) {
 	std::vector<VerInf> output = { v1,v2,v3 };
+
 	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord)) {
 		return output;
 	}
@@ -248,7 +256,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
 		Vec3f window_coord = viewport_transform(width, height, verInf[i]->ndc_coord);
-		screen_coords[i] = Vec2i((int)window_coord.x, (int)window_coord.y);
+		screen_coords[i] = Vec2i(int(window_coord.x+0.5), int(window_coord.y+0.5));
 		screen_depths[i] = window_coord.z;
 	}
 
@@ -277,8 +285,10 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 			int weight2_okay = weights.z > -EPSILON;
 			if (weight0_okay && weight1_okay && weight2_okay) {
 				int zbufferInd = P.x + P.y * width;
-				double frag_depth = interpolate_depth(screen_depths, weights);
-				
+				double frag_depth = 1.0;
+				if (enableZTest)
+					frag_depth = interpolate_depth(screen_depths, weights);
+
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
@@ -296,8 +306,6 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 					//调用面元着色器
 					bool discard = shader.fragment(temp, color);
 					if (!discard) {
-						//更新zbuffer
-						zbuffer[zbufferInd] = frag_depth;
 						if (fog) {
 							frag_depth = LinearizeDepth(frag_depth, near, far) / far;
 							float fogRange = 0.3;
@@ -305,17 +313,19 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 							float rate = (frag_depth - fogStartPos) / fogRange;
 							rate = clamp(rate, 0.0f, 1.0f);
 
-							//TGAColor deothColor(255, 255, 255, rate * 255);
-							//进行alpha混合
-							TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
 							
-							color[3] = (1-rate) * 255;
-							color = blendColor(color, colorNow);
-							
-							//color = blendColor(deothColor, color);
+							color[3] = (1 - rate) * 255;
 						}
+						//进行alpha混合
+						TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+						color = blendColor(color, colorNow);
 						//写入绘制buffer
 						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
+
+
+						//更新zbuffer
+						if(enableZWrite)
+							zbuffer[zbufferInd] = frag_depth;
 					}
 				}
 			}
@@ -337,8 +347,8 @@ void triangle(VerInf* vertexs, IShader& shader,
 
 	/* perspective division */
 	for (int i = 0; i < clipingVertexs.size(); i++) {
-		clipingVertexs[i].recip_w = 1 / clipingVertexs[i].clip_coord.w;
-		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord) * clipingVertexs[i].recip_w;
+		clipingVertexs[i].recip_w = 1.0f / clipingVertexs[i].clip_coord.w;
+		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord * clipingVertexs[i].recip_w);
 	}
 
 	int n = clipingVertexs.size() - 3 + 1;
@@ -466,7 +476,6 @@ Matrix setFrustum(double fovy, double aspect, double near, double far)
 	matrix[3][3] = 0;
 
 	return matrix;
-
 }
 
 Matrix mat4_orthographic(float right, float top, float near, float far) {

@@ -259,12 +259,12 @@ std::ostream& operator<<(std::ostream& out, mat<DimRows, DimCols, T>& m) {
 
 /////////////////////////////////////////////////////////////////////////////////
 
-typedef vec<2, double> Vec2f;
+typedef vec<2, float> Vec2f;
 typedef vec<2, int>   Vec2i;
-typedef vec<3, double> Vec3f;
+typedef vec<3, float> Vec3f;
 typedef vec<3, int>   Vec3i;
-typedef vec<4, double> Vec4f;
+typedef vec<4, float> Vec4f;
 typedef vec<4, unsigned char> ColorVec;
-typedef mat<4, 4, double> Matrix;
+typedef mat<4, 4, float> Matrix;
 
 #endif
