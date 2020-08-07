@@ -267,4 +267,5 @@ typedef vec<4, float> Vec4f;
 typedef vec<4, unsigned char> ColorVec;
 typedef mat<4, 4, float> Matrix;
 
+
 #endif

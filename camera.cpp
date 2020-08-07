@@ -2,10 +2,6 @@
 
 Camera::Camera()
 {
-	NEAR = 0.1f;
-	FAR = 20;
-	FOVY = 60;
-	aspect = 1920/1080;
 	ProjectionMode = true;
 }
 
@@ -22,12 +18,14 @@ void Camera::setCamera(Vec3f& pos, Vec3f& targetPos, Vec3f& up)
 	ViewMatrix = lookat(camPos, camTargetPos, camUp);
 }
 
-Camera::Camera(float screenAspect,float near = 0.1f,float far = 20,float fovy = 60)
+
+Camera::Camera(ViewPort* targetViewPort,float near = 0.1f,float far = 20,float fovy = 60)
 {
 	NEAR = near;
 	FAR = far;
 	FOVY = fovy;
-	aspect = screenAspect;
+	this->targetViewPort = targetViewPort;
+	aspect = targetViewPort->v_width/targetViewPort->v_height;
 	ProjectionMode = true;
 	if(ProjectionMode)
 		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
@@ -55,7 +53,9 @@ void Camera::moveTransverse(float amount)
 
 void Camera::moveVertical(float amount)
 {
-	camPos = camPos + camUp.normalize() * amount;
+	Vec3f x = cross(camUp, camDir).normalize();
+	Vec3f y = cross(camDir, x).normalize();
+	camPos = camPos + y * amount;
 	setViewMatrix();
 }
 
@@ -76,6 +76,13 @@ void Camera::setFov(float Fov)
 		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
 	else
 		ProjectionMatrix = mat4_orthographic(6, 4, NEAR, FAR);
+}
+
+void Camera::changeViewPort(ViewPort* newViewPort)
+{
+	targetViewPort = newViewPort;
+	aspect = newViewPort->v_width / newViewPort->v_height;
+	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
 }
 
 

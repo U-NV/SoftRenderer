@@ -37,7 +37,7 @@ inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& f
 }
 
 inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, ColorVec* drawBuffer) {
-	int bufferInd = x + y * width;
+	int bufferInd = x + y * 600;
 	drawBuffer[bufferInd].x = color[2];
 	drawBuffer[bufferInd].y = color[1];
 	drawBuffer[bufferInd].z = color[0];
@@ -50,7 +50,7 @@ inline TGAColor blendColor(TGAColor& newColor, TGAColor& oldColor) {
 	return newColor;
 }
 
-void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int height, Frame* drawBuffer) {
 	x0 = clamp(x0, 0, width-1);
 	x1 = clamp(x1, 0, width-1);
 
@@ -75,11 +75,11 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int he
     int y = y0;
     for (int x = x0; x <= x1; x++) {
         if (steep) {
-			setPixelBuffer(y, x, width, height, color, drawBuffer);
-			//SDLDrawPixel(gRenderer, gWindow, y, x, color);
+			drawBuffer->setPixel(y, x, color);
         }
         else {
-			setPixelBuffer(x, y, width, height, color, drawBuffer);
+			drawBuffer->setPixel(x, y, color);
+			//setPixelBuffer(x, y, width, height, color, drawBuffer);
 			//SDLDrawPixel(gRenderer, gWindow, x, y, color);
         }
         error2 += derror2;
@@ -89,10 +89,10 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int he
         }
     }
 }
-void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, int width, int height, Frame* drawBuffer) {
     drawLine(a.x, a.y, b.x, b.y, color, width,height, drawBuffer);
 }
-void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, Frame* drawBuffer) {
 	drawLine(a.x, a.y, b.x, b.y, color, width, height, drawBuffer);
 }
 
@@ -111,17 +111,17 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	else
 		return signed_area >= 0;
 }
-void draw2DFrame(VerInf** vertexs, TGAColor& color, int width, int height, ColorVec* drawBuffer) {
+void draw2DFrame(VerInf** vertexs, TGAColor& color, const ViewPort& port, Frame* drawBuffer) {
 	Vec2i screen_coords[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(width, height, vertexs[i]->ndc_coord);
+		Vec3f window_coord = port.transform(vertexs[i]->ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord[0], (int)window_coord[1]);
 	}
 
-	drawLine(screen_coords[0], screen_coords[1], color, width, height, drawBuffer);
-	drawLine(screen_coords[1], screen_coords[2], color, width, height, drawBuffer);
-	drawLine(screen_coords[2], screen_coords[0], color, width, height, drawBuffer);
+	drawLine(screen_coords[0], screen_coords[1], color, port.v_width, port.v_height, drawBuffer);
+	drawLine(screen_coords[1], screen_coords[2], color, port.v_width, port.v_height, drawBuffer);
+	drawLine(screen_coords[2], screen_coords[0], color, port.v_width, port.v_height, drawBuffer);
 }
 
 inline Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
@@ -246,23 +246,22 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 	return output;
 }
 
-void drawTriangle2D(VerInf** verInf, IShader& shader, 
-	const int& width, const int& height, const float& near, const float& far, 
-	double* zbuffer, ColorVec* drawBuffer,
+void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port, 
+	const float& near, const float& far,
+	double* zbuffer, Frame* drawBuffer,
 	bool fog) {
 	Vec2i screen_coords[3];
 	double screen_depths[3];
-	
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
-		Vec3f window_coord = viewport_transform(width, height, verInf[i]->ndc_coord);
+		Vec3f window_coord = port.transform(verInf[i]->ndc_coord);
 		screen_coords[i] = Vec2i(int(window_coord.x+0.5), int(window_coord.y+0.5));
 		screen_depths[i] = window_coord.z;
 	}
 
-	Vec2i bboxmin(width - 1, height - 1);
+	Vec2i bboxmin(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
 	Vec2i bboxmax(0, 0);
-	Vec2i bboxClamp(width - 1, height - 1);
+	Vec2i bboxClamp(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
 
 	for (int i = 0; i < 3; i++) {
 		bboxmin.x = std::max(0, std::min(bboxmin.x, screen_coords[i].x));
@@ -284,7 +283,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 			int weight1_okay = weights.y > -EPSILON;
 			int weight2_okay = weights.z > -EPSILON;
 			if (weight0_okay && weight1_okay && weight2_okay) {
-				int zbufferInd = P.x + P.y * width;
+				int zbufferInd = P.x + P.y * port.v_width;
 				double frag_depth = 1.0;
 				if (enableZTest)
 					frag_depth = interpolate_depth(screen_depths, weights);
@@ -317,12 +316,11 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 							color[3] = (1 - rate) * 255;
 						}
 						//进行alpha混合
-						TGAColor colorNow(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
+						TGAColor colorNow = drawBuffer->getPixel(P[0], P[1]);//(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
 						color = blendColor(color, colorNow);
 						//写入绘制buffer
-						setPixelBuffer(P[0], P[1], width, height, color, drawBuffer);
-
-
+						drawBuffer->setPixel(P[0], P[1], color);
+						//setPixelBuffer(P[0], P[1], port.v_width, port.v_height, color, drawBuffer);
 						//更新zbuffer
 						if(enableZWrite)
 							zbuffer[zbufferInd] = frag_depth;
@@ -335,8 +333,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,
 }
 
 void triangle(VerInf* vertexs, IShader& shader,
-	const int& width, const int& height, const float& near, const float& far, 
-	double* zbuffer, ColorVec* drawBuffer,
+	const ViewPort& port, const float& near, const float& far,
+	double* zbuffer, Frame* drawBuffer,
 	bool farme, bool fog) {
 	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord, near,far)) {
 		return;
@@ -361,9 +359,9 @@ void triangle(VerInf* vertexs, IShader& shader,
 			return;
 		}
 		if (farme)
-			draw2DFrame(verList, white, width,height,drawBuffer);
+			draw2DFrame(verList, white, port, drawBuffer);
 		else
-			drawTriangle2D(verList, shader,  width, height,near,far, zbuffer, drawBuffer, fog);
+			drawTriangle2D(verList, shader, port, near,far, zbuffer, drawBuffer, fog);
 	}
 
 }
@@ -502,15 +500,100 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	return projection;
 }
 
+TGAColor CubeMap(TGAImage* skyboxFaces, Vec3f pos) {
+	int maxDir = fabs(pos.x) > fabs(pos.y) ? 0 : 1;
+	maxDir = fabs(pos[maxDir]) > fabs(pos.z) ? maxDir : 2;
+	if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
+	else maxDir *= 2;
+	float screen_coord[2];
+	for (int i = 0; i < 3; i++) {
+		pos[i] = (pos[i] + 1) * 0.5;
+	}
+	switch (maxDir) {
+	case 0://+x
+		screen_coord[0] = 1 - pos.z;
+		screen_coord[1] = 1 - pos.y;
+		break;
+	case 1://-x
+		screen_coord[0] = pos.z;
+		screen_coord[1] = 1 - pos.y;
+		break;
+	case 2://+y
+		screen_coord[0] = 1 - pos.x;
+		screen_coord[1] = 1 - pos.z;
+		break;
+	case 3://-y
+		screen_coord[0] = 1 - pos.x;
+		screen_coord[1] = pos.z;
+		break;
+	case 4://+z
+		screen_coord[0] = pos.x;
+		screen_coord[1] = 1 - pos.y;
+		break;
+	case 5://-z
+		screen_coord[0] = 1 - pos.x;
+		screen_coord[1] = 1 - pos.y;
+		break;
+	}
+	screen_coord[0] = screen_coord[0] - (float)floor(screen_coord[0]);
+	screen_coord[1] = screen_coord[1] - (float)floor(screen_coord[1]);
+
+	screen_coord[0] = screen_coord[0] * skyboxFaces[maxDir].get_width();
+	screen_coord[1] = screen_coord[1] * skyboxFaces[maxDir].get_height();
 
 
+	TGAColor cubeColor = skyboxFaces[maxDir].get(int(screen_coord[0]), int(screen_coord[1]));
+	//std::cout << "dir:" << pos << " maxDir:" << maxDir <<" uv:"<< screen_coord[0]<<","<< screen_coord[1]
+	//	<< " Color " << cubeColor[2]<<","<< cubeColor[1] << "," << cubeColor[0] << std::endl;
+	return cubeColor;
+}
 
-
-Vec3f viewport_transform(int width, int height, Vec3f ndc_coord) {
-	double x = double((double)ndc_coord.x + 1.0f) * 0.5f * (double)width;   /* [-1, 1] -> [0, w] */
-	double y = double((double)ndc_coord.y + 1.0f) * 0.5f * (double)height;  /* [-1, 1] -> [0, h] */
+Vec3f ViewPort::transform(Vec3f& ndc_coord)const
+{
+	double x = v_pos.x + double((double)ndc_coord.x + 1.0f) * 0.5f * (double)v_width;   /* [-1, 1] -> [0, w] */
+	double y = v_pos.y + double((double)ndc_coord.y + 1.0f) * 0.5f * (double)v_height;  /* [-1, 1] -> [0, h] */
 	double z = double((double)ndc_coord.z + 1.0f) * 0.5f;                  /* [-1, 1] -> [0, 1] */
 	return Vec3f(x, y, z);
 }
 
 
+
+Frame::Frame(int w, int h)
+{
+	f_width = w;
+	f_height = h;
+	buffer = new ColorVec[f_width * f_height];
+}
+
+Frame::~Frame()
+{
+	delete[] buffer;
+}
+void Frame::setPixel(int& x, int& y, TGAColor& color)
+{
+	int bufferInd = x + y * f_width;
+	buffer[bufferInd].x = color[2];
+	buffer[bufferInd].y = color[1];
+	buffer[bufferInd].z = color[0];
+	buffer[bufferInd].w = color[3];
+}
+
+void Frame::setPixel(int& x, int& y, ColorVec& color)
+{
+	int bufferInd = x + y * f_width;
+	buffer[bufferInd].x = color.x;
+	buffer[bufferInd].y = color.y;
+	buffer[bufferInd].z = color.z;
+	buffer[bufferInd].w = color.w;
+}
+
+TGAColor Frame::getPixel(int& x, int& y) {
+	int bufferId = x + y * f_width;
+	return TGAColor(buffer[bufferId].x, buffer[bufferId].y, buffer[bufferId].z, buffer[bufferId].w);
+}
+
+void Frame::fill(const ColorVec& defaultColor)
+{
+	std::fill(buffer, buffer + f_width * f_height, defaultColor);
+}
+;

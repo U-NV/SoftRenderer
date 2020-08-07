@@ -2,7 +2,6 @@
 #ifndef __MY_GL__
 #define __MY_GL__
 
-#include "camera.h"
 #include "tgaimage.h"
 #include "myVector.h"
 #include <vector>
@@ -61,12 +60,6 @@ struct IShader {
     virtual bool fragment(VerInf verInf, TGAColor& color) = 0;
 };
 
-//绘制三角面片
-void triangle(VerInf* vertexs, IShader& shader, 
-	const int& width, const int& height, const float& near, const float& far, 
-	double* zbuffer, ColorVec* drawBuffer,
-	bool farme, bool fog);
-
 //模型矩阵
 Matrix translate(double x, double y, double z);
 Matrix rotate(Vec3f& axis, double theta);
@@ -84,7 +77,40 @@ Matrix mat4_orthographic(float right, float top, float near, float far);
 float LinearizeDepth(float depth, float near, float far);
 
 //视窗变换
-Vec3f viewport_transform(int width, int height, Vec3f ndc_coord);
+class ViewPort
+{
+public:
+	Vec2i v_pos;
+	int v_width;
+	int v_height;
+	ViewPort(Vec2i pos, int width, int height) :v_pos(pos), v_width(width), v_height(height) {};
+	Vec3f transform(Vec3f& ndc_coord) const;
+};
+
+class Frame
+{
+public:
+	Frame(int w,int h);
+	~Frame();
+	void setPixel(int& x, int& y, TGAColor& color);
+	void setPixel(int& x, int& y, ColorVec& color);
+
+	TGAColor getPixel(int& x, int& y);
+	void fill(const ColorVec& defaultColor);
+	int f_width;
+	int f_height;
+private:
+	ColorVec* buffer;
+};
 
 
+//立方贴图
+TGAColor CubeMap(TGAImage* skyboxFaces, Vec3f pos);
+
+
+//绘制三角面片
+void triangle(VerInf* vertexs, IShader& shader,
+	const ViewPort& port, const float& near, const float& far,
+	double* zbuffer, Frame* drawBuffer,
+	bool farme, bool fog);
 #endif // !__MY_GL__

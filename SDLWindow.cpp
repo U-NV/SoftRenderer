@@ -1,4 +1,5 @@
 #include "SDLWindow.h"
+#include "myGL.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -41,12 +42,13 @@ inline void SDLWindow::init(const char* name,const int  SCREEN_WIDTH, const int 
 }
 
 //将坐标系原点改为左下角
-inline void SDLWindow::drawPixel(int& x, int& y, const int& width, const int& height, ColorVec* drawBuffer)
-{
-	int bufferInd = x + y * width;
-	SDL_SetRenderDrawColor(gRenderer, drawBuffer[bufferInd].x, drawBuffer[bufferInd].y, drawBuffer[bufferInd].z, drawBuffer[bufferInd].w);
-	SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
-}
+//inline void SDLWindow::drawPixel(int& x, int& y, const int& width, const int& height, Frame* drawBuffer)
+//{
+//	int bufferInd = x + y * width;
+//	TGAColor* temp = &drawBuffer->getPixel(x, y);
+//	SDL_SetRenderDrawColor(gRenderer, temp->bgra[2], temp->bgra[1], temp->bgra[0], temp->bgra[3]);
+//	SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
+//}
 
 SDLWindow::SDLWindow(const char* name, const int SCREEN_WIDTH, const int SCREEN_HEIGHT)
 {
@@ -69,12 +71,15 @@ void SDLWindow::close()
 	SDL_Quit();
 }
 
-void SDLWindow::refresh(ColorVec* buffer)
+void SDLWindow::refresh(Frame* buffer)
 {
 	//将缓存内容赋值给屏幕
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			drawPixel(x, y, width, height, buffer);
+			int bufferInd = x + y * width;
+			TGAColor* temp = &buffer->getPixel(x, y);
+			SDL_SetRenderDrawColor(gRenderer, temp->bgra[2], temp->bgra[1], temp->bgra[0], temp->bgra[3]);
+			SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
 		}
 	}
 	//更新屏幕显示内容

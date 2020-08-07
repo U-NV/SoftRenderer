@@ -11,7 +11,6 @@ private:
 	float FAR;
 	float FOVY;
 	float aspect;
-
 	float yaw = 270;
 	float pitch =0;
 
@@ -20,13 +19,15 @@ private:
 	Vec3f camDir = { 0, 0, -1 };
 	Vec3f camTargetPos = { 0, 0, 0 };
 
+	ViewPort* targetViewPort;
+
 	Matrix ViewMatrix;
 	Matrix ProjectionMatrix;
 	bool ProjectionMode = true;
 public:
 	
 	Camera();
-	Camera(float screenAspect, float near, float far, float fovy);
+	Camera(ViewPort* targetViewPort, float near, float far, float fovy);
 	~ Camera();
 
 	inline void setViewMatrix();
@@ -37,6 +38,9 @@ public:
 	void rotateCamera(Vec2f offset);  // yaw方法
 	void changeFov(float amount);  // 改变视野
 	void setFov(float Fov);  // 改变视野
+
+	void changeViewPort(ViewPort* newViewPort);
+
 
 	Vec3f getPos();
 	void setCamera(Vec3f& pos, Vec3f& targetPos, Vec3f& up);

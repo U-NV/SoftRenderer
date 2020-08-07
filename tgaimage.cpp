@@ -408,3 +408,53 @@ void TGAImage::gaussian_blur(const int radius) {
 }
 
 
+
+void drawWindowTGA() {
+    int imageH = 256;
+    int imageW = 256;
+    int midH = imageH / 2;
+    int midW = imageW / 2;
+    int lineW = 10;
+    int halfLineW = lineW / 2;
+    TGAImage frame(imageW, imageH, TGAImage::RGBA);
+
+    TGAColor frameColor(100, 80, 100, 255);
+    TGAColor windowColor(0, 200, 255, 128);
+
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            if ((i < lineW || i >= imageH - lineW)
+                || (j < lineW || j >= imageW - lineW)
+                || (i > midH - halfLineW && i <= midH + halfLineW)
+                || (j > midW - halfLineW && j <= midW + halfLineW))
+            {
+                frame.set(i, j, frameColor);
+            }
+            else {
+                frame.set(i, j, windowColor);
+            }
+
+        }
+    }
+    frame.flip_vertically(); // to place the origin in the bottom left corner of the image
+    frame.write_tga_file("window_diffuse.tga");
+}
+
+void drawFloorTGA() {
+    int imageH = 256;
+    int imageW = 256;
+    int midH = imageH / 2;
+    int midW = imageW / 2;
+    int lineW = 10;
+    int halfLineW = lineW / 2;
+    TGAImage frame(imageW, imageH, TGAImage::RGBA);
+    TGAColor frameColor(100, 30, 0, 255);
+
+    for (int i = 0; i < imageH; i++) {
+        for (int j = 0; j < imageW; j++) {
+            frame.set(i, j, frameColor);
+        }
+    }
+    frame.flip_vertically(); // to place the origin in the bottom left corner of the image
+    frame.write_tga_file("backgroundColorFloor_diffuse.tga");
+}

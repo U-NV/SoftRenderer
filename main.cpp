@@ -10,7 +10,7 @@
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 600;
-const int SCREEN_HEIGHT = 400;
+const int SCREEN_HEIGHT = 300;
 
 const int SHADOW_WIDTH = 500, SHADOW_HEIGHT = 500;
 //位置相关参数
@@ -26,8 +26,8 @@ const ColorVec white(0xFF, 0xFF, 0xFF, 0xFF);
 const ColorVec black(0x00, 0x00, 0x00, 0xFF);
 
 //光源位置
-//Vec3f lightPos(2, 3, -1);//暗黑破坏神光源
-Vec3f lightPos(2.2, 3.5, 2);//黑人头
+Vec3f lightPos(2, 3, -1);//暗黑破坏神光源
+//Vec3f lightPos(2.2, 3.5, 2);//黑人头
 
 //模型指针
 Model* model;
@@ -43,11 +43,13 @@ Camera lightCamera;
 struct Shader : public IShader {
 	Matrix *LightSpaceMatrix;
 	double* ShadowBuffer;
-	ColorVec* SAAOTexture;
-	Shader(Matrix *lightSpaceMatrix, double* shadowBuffer, ColorVec* ssao) {
+	Frame* SAAOTexture; 
+	ViewPort const* ShadowPort;
+	Shader(Matrix *lightSpaceMatrix, ViewPort const* shadowPort,double* shadowBuffer, Frame* ssao) {
 		LightSpaceMatrix = lightSpaceMatrix;
 		ShadowBuffer = shadowBuffer;
 		SAAOTexture = ssao;
+		ShadowPort = shadowPort;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
@@ -60,7 +62,7 @@ struct Shader : public IShader {
 		faceVer.clip_coord = MVP * embed<4>(model->vert(iface, nthvert));
 	}
 
-	float inShadow(Vec3f& world_pos, float& bias) {
+	inline float inShadow(Vec3f& world_pos, float& bias) {
 		//计算顶点在光照坐标系的坐标
 		Vec4f clipPosLightSpace = *LightSpaceMatrix * embed<4>(world_pos);
 		//进行透视除法
@@ -73,7 +75,7 @@ struct Shader : public IShader {
 		if (ndcLightSpace.y > 1.0 || ndcLightSpace.y < -1.0)return 0;
 		if (ndcLightSpace.z > 1.0 || ndcLightSpace.z < -1.0)return 0;
 		//变换到阴影贴图的范围
-		Vec3f shadowTextureCoords = viewport_transform(SHADOW_WIDTH, SHADOW_HEIGHT, ndcLightSpace);
+		Vec3f shadowTextureCoords = ShadowPort->transform(ndcLightSpace);
 		//从缓存中得到最近的深度
 		int x = clamp((int)shadowTextureCoords.x, 0, SHADOW_WIDTH - 1);
 		int y = clamp((int)shadowTextureCoords.y, 0, SHADOW_HEIGHT - 1);
@@ -123,7 +125,7 @@ struct Shader : public IShader {
 		//设置光照
 		float lightPower = 16;
 		//环境光
-		float ambient = SAAOTexture[SCREEN_WIDTH * verInf.screen_coord.y + verInf.screen_coord.x].x / 255.0f;
+		float ambient = SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y).bgra[0] / 255.0f;
 		//float ambient = 0.3f;
 		ambient = clamp(ambient, 0.2f, 0.7f);
 		//float ambient = 1;
@@ -143,7 +145,7 @@ struct Shader : public IShader {
 		Vec3f hafe = (lightDir + viewDir).normalize();
 		float spec = clamp<float>(std::abs(normal * hafe), 0, 1);
 
-		
+		spec = pow(spec, 1);
 		//设置阴影偏移
 		float bias = std::max(0.1 * (1.0 - diff), 0.005);
 		//计算该点在不在阴影区域
@@ -199,11 +201,8 @@ struct SSAOShader : public IShader {
 
 struct skyboxShader : public IShader {
 	TGAImage* skyboxFaces;
-	Vec2i skyboxSize;
 	skyboxShader(TGAImage* skyboxFaces) {
 		this->skyboxFaces = skyboxFaces;
-		this->skyboxSize = 
-			Vec2i(skyboxFaces[0].get_width(),skyboxFaces[0].get_height());
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
 		Vec4f gl_Vertex = embed<4>(model->vert(iface, nthvert));
@@ -215,116 +214,73 @@ struct skyboxShader : public IShader {
 		//faceVer.clip_coord.w = 1.0f;
 		//faceVer.clip_coord.z = faceVer.clip_coord.w;
 	}
-	TGAColor CubeMap(Vec3f pos) {
-		int maxDir = fabs(pos.x) > fabs(pos.y) ? 0 : 1;
-		maxDir = fabs(pos[maxDir]) > fabs(pos.z) ? maxDir : 2;
-		if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
-		else maxDir *= 2;
-		float screen_coord[2];
-		for (int i = 0; i < 3; i++) {
-			pos[i] = (pos[i] + 1) * 0.5;
-		}
-		switch (maxDir) {
-			case 0://+x
-				screen_coord[0] = 1 - pos.z;
-				screen_coord[1] = 1 - pos.y;
-				break;
-			case 1://-x
-				screen_coord[0] = pos.z;
-				screen_coord[1] = 1-pos.y;
-				break;
-			case 2://+y
-				screen_coord[0] = 1-pos.x;
-				screen_coord[1] = 1-pos.z;
-				break;
-			case 3://-y
-				screen_coord[0] = 1 - pos.x;
-				screen_coord[1] = pos.z;
-				break;
-			case 4://+z
-				screen_coord[0] = pos.x;
-				screen_coord[1] = 1 - pos.y;
-				break;
-			case 5://-z
-				screen_coord[0] = 1 - pos.x;
-				screen_coord[1] = 1 - pos.y;
-				break;
-		}
-		screen_coord[0] = screen_coord[0] - (float)floor(screen_coord[0]);
-		screen_coord[1] = screen_coord[1] - (float)floor(screen_coord[1]);
 
-		screen_coord[0] = screen_coord[0] * skyboxSize.x;
-		screen_coord[1] = screen_coord[1] * skyboxSize.y;
-
-		
-		TGAColor cubeColor = skyboxFaces[maxDir].get(int(screen_coord[0]), int(screen_coord[1]));
-		//std::cout << "dir:" << pos << " maxDir:" << maxDir <<" uv:"<< screen_coord[0]<<","<< screen_coord[1]
-		//	<< " Color " << cubeColor[2]<<","<< cubeColor[1] << "," << cubeColor[0] << std::endl;
-		return cubeColor;
-	}
 	virtual bool fragment(VerInf verInf, TGAColor& color) {
-		color = CubeMap(verInf.world_pos);
+		color = CubeMap(skyboxFaces, verInf.world_pos);
 		return false;
 	}
 };
 
 float max_elevation_angle(double* zbuffer, float radio, float near, float far, Vec2f& p, Vec2f& dir) {
 	float maxangle = 0;
-	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far);
-	//double orgZ = zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH];
+	//double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far);
+	double orgZ = zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH];
 	for (float t = 0.; t < radio; t += 1.) {
 		Vec2f cur = p + dir * t;
 		if (cur.x >= SCREEN_WIDTH || cur.y >= SCREEN_HEIGHT || cur.x < 0 || cur.y < 0) return maxangle;
 
 		float distance = (p - cur).norm();
 		//if (distance < 1.f) continue;
-		double nearZ = LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far) ;
-		if (abs(orgZ - nearZ) >= 0.2)continue;
+		double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];// LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far);
+		//double nearZ =  LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far);
+		//if (abs(orgZ - nearZ) >= 0.2)continue;
 		//double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
-		float elevation = nearZ/ far - orgZ / far;
+		//float elevation = nearZ/ far - orgZ / far;
+		float elevation = nearZ - orgZ;
 		//if (elevation >= 0.2) continue;
 		maxangle = std::max(maxangle, atanf(elevation / distance));
 	}
 	return maxangle;
 }
 
-//float deepSampling(double* zbuffer, int radio, float near, float far, Vec2f& p) {
-//	float orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far)/ far;
-//	//std::cout << "orgZ" << orgZ << std::endl;
-//	float max = 0;
-//	int count = 0;
-//	for (int x = -radio; x <= radio; x += 1) {
-//		for (int y = -radio; y <= radio; y += 1) {
-//			int tempX = clamp<int>(p.x + x, 0, SCREEN_WIDTH-1);
-//			int tempY = clamp<int>(p.y + y, 0, SCREEN_HEIGHT-1);
-//			float diff = LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far)/ far - orgZ;
-//			if (abs(diff) > 0.001)diff = 0;
-//			max = abs(diff)> abs(max)?diff:max;
-//			//if (orgZ < 0.98) {
-//			//	std::cout << "orgZ(" << int(p.x) << "," << int(p.y) << "):" << orgZ << std::endl;
-//			//	std::cout << "near(" << tempX << "," << tempY << "):" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far << std::endl;
-//			//	std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-//			//	std::cout << "sum" << sum << std::endl;
-//			//}
-//			
-//			//std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-//			//std::cout << "sum" << sum << std::endl;
-//			count++;
-//		}
-//	}
-//	//std::cout << "Sampling num" << count << std::endl;
-//	//std::cout << "totle num" << sum << std::endl;
-//	//sum /= float((radio * 2 + 1) * (radio * 2 + 1));
-//	max = max*100 +0.5;
-//	//sum = pow(sum, 2);
-//	//std::cout << "deepSampling" << sum << std::endl << std::endl;
-//	return max;
-//}
+float deepSampling(double* zbuffer, int radio, float near, float far, Vec2f& p) {
+	float orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far)/ far;
+	//std::cout << "orgZ" << orgZ << std::endl;
+	float max = 0;
+	int count = 0;
+	for (int x = -radio; x <= radio; x += 1) {
+		for (int y = -radio; y <= radio; y += 1) {
+			int tempX = clamp<int>(p.x + x, 0, SCREEN_WIDTH-1);
+			int tempY = clamp<int>(p.y + y, 0, SCREEN_HEIGHT-1);
+			float diff = LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far)/ far - orgZ;
+			if (abs(diff) > 0.001)diff = 0;
+			max = abs(diff)> abs(max)?diff:max;
+			//if (orgZ < 0.98) {
+			//	std::cout << "orgZ(" << int(p.x) << "," << int(p.y) << "):" << orgZ << std::endl;
+			//	std::cout << "near(" << tempX << "," << tempY << "):" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far << std::endl;
+			//	std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
+			//	std::cout << "sum" << sum << std::endl;
+			//}
+			
+			//std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
+			//std::cout << "sum" << sum << std::endl;
+			count++;
+		}
+	}
+	//std::cout << "Sampling num" << count << std::endl;
+	//std::cout << "totle num" << sum << std::endl;
+	//sum /= float((radio * 2 + 1) * (radio * 2 + 1));
+	max = max*100 +0.5;
+	//sum = pow(sum, 2);
+	//std::cout << "deepSampling" << sum << std::endl << std::endl;
+	return max;
+}
 
-void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAOTexture) {
+void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zbuffer, Frame* SSAOTexture) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
-	std::fill(SSAOTexture, SSAOTexture + SCREEN_WIDTH * SCREEN_HEIGHT, white);
+	SSAOTexture->fill(white);
+	//std::fill(SSAOTexture, SSAOTexture + SCREEN_WIDTH * SCREEN_HEIGHT, white);
 
 	float far = defaultCamera.getFar();
 	float near = defaultCamera.getNear();
@@ -342,7 +298,7 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 				shader.vertex(i, j, faceVer[j]);
 			}
 			triangle(faceVer, shader, //传入顶点数据和shader
-				SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+				port,//传入屏幕大小用于视窗变换
 				near, far, //传入透视远近平面用于裁切和线性zbuffer
 				zbuffer, SSAOTexture,//传入绘制buffer
 				false,//是否绘制线框模型
@@ -373,6 +329,7 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 		dirList[i] = Vec2f(cos(a), sin(a));
 	}
 	Vec2f posNow(0, 0);
+	ColorVec temp;
 	for (posNow.x = 0; posNow.x < SCREEN_WIDTH; posNow.x++) {
 		for (posNow.y = 0; posNow.y < SCREEN_HEIGHT; posNow.y++) {
 			int id = posNow.x + posNow.y * SCREEN_WIDTH;
@@ -386,20 +343,30 @@ void drawSSAOTexture(std::vector<Model>& models, double* zbuffer, ColorVec* SSAO
 			//std::cout << total << std::endl;
 			total /= halfPI * samplingDir;
 			total = pow(total, 1000.f);
-			SSAOTexture[id].x = total * 255;
-			SSAOTexture[id].y = total * 255;
-			SSAOTexture[id].z = total * 255;
-			SSAOTexture[id].w = 255;
+			
+			temp.x = total * 255;
+			temp.y = total * 255;
+			temp.z = total * 255;
+			temp.w = 255;
+
+			int x = posNow.x;
+			int y = posNow.y;
+			SSAOTexture->setPixel(x,y, temp);
+
 		}
-		//std::cout << "ssao persent:" << int((float)x / SCREEN_WIDTH * 100) << "%" << std::endl;
 	}
 
 }
 
-void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* shadowTexture) {
+void drawShadowMap(std::vector<Model>& models, const ViewPort& port, double* shadowBuffer, Frame* shadowTexture) {
 	//清空shadowMap数据，重新绘制
 	std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
-	std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_WIDTH, white);
+	shadowTexture->fill(white);
+	//std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_WIDTH, white);
+
+	//启动深度测试
+	enableZTest = true;
+	enableZWrite = true;
 
 	//将摄像机摆放到光源位置
 	//lightCamera.enableProjectMode(false);
@@ -428,7 +395,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 				depthshader.vertex(i, j, faceVer[j]);
 			}
 			triangle(faceVer, depthshader,//传入顶点数据和shader
-					SHADOW_WIDTH, SHADOW_HEIGHT,//传入屏幕大小用于视窗变换
+					port,//传入屏幕大小用于视窗变换
 					lightCamera.getNear(),lightCamera.getFar(),//传入透视远近平面用于裁切和线性zbuffer
 					shadowBuffer, shadowTexture,//传入绘制buffer
 					false,//是否绘制线框模型
@@ -441,7 +408,7 @@ void drawShadowMap(std::vector<Model>& models, double* shadowBuffer, ColorVec* s
 	enableFrontFaceCulling = false;
 }
 
-void drawSkybox(Model& skyboxModle,TGAImage* skyboxFaces,ColorVec* drawBuffer, double* zbuffer) {
+void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,Frame* drawBuffer, double* zbuffer) {
 	enableFaceCulling = false;
 	enableZWrite = false;
 	enableZTest = false;
@@ -454,7 +421,7 @@ void drawSkybox(Model& skyboxModle,TGAImage* skyboxFaces,ColorVec* drawBuffer, d
 			skyboxShader.vertex(i, j, faceVer[j]);
 		}
 		triangle(faceVer, skyboxShader, //传入顶点数据和shader
-			SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+			port,//传入屏幕大小用于视窗变换
 			defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
 			zbuffer, drawBuffer,//传入绘制buffer
 			false,//是否绘制线框模型
@@ -462,11 +429,12 @@ void drawSkybox(Model& skyboxModle,TGAImage* skyboxFaces,ColorVec* drawBuffer, d
 		);
 
 	}
+	enableZTest = true;
 	enableZWrite = true;
 	enableFaceCulling = true;
 }
 
-void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer, double* zbuffer, ColorVec* SAAOTexture) {
+void draw(std::vector<Model>& models, const ViewPort& port, const ViewPort& shadowPort, Frame* drawBuffer,double* shadowBuffer, double* zbuffer, Frame* SAAOTexture) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	enableFaceCulling = true;
@@ -476,7 +444,7 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		Shader shader(&lightSpaceMatrix, shadowBuffer, SAAOTexture);
+		Shader shader(&lightSpaceMatrix, &shadowPort, shadowBuffer, SAAOTexture);
 		VerInf faceVer[3];
 		model = &models[m];
 		for (int i = 0; i < model->nfaces(); i++) {
@@ -484,7 +452,7 @@ void draw(std::vector<Model>& models, ColorVec* drawBuffer,double* shadowBuffer,
 				shader.vertex(i, j, faceVer[j]);
 			}
 			triangle(faceVer, shader, //传入顶点数据和shader
-					SCREEN_WIDTH, SCREEN_HEIGHT,//传入屏幕大小用于视窗变换
+					port,//传入屏幕大小用于视窗变换
 					defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
 					zbuffer, drawBuffer,//传入绘制buffer
 					false,//是否绘制线框模型
@@ -539,8 +507,10 @@ int main(int argc, char** argv) {
 		}
 
 		//创建相机
-		defaultCamera = Camera((float)SCREEN_WIDTH / SCREEN_HEIGHT, 0.3, 10, 60);
-		lightCamera = Camera((float)SHADOW_WIDTH / SHADOW_HEIGHT, 0.3, 10, 60);
+		ViewPort defaultViewPort(Vec2i(0, 0), SCREEN_WIDTH, SCREEN_HEIGHT);
+		defaultCamera = Camera(&defaultViewPort, 0.3, 10, 60);
+		ViewPort shadowViewPort(Vec2i(0, 0), SHADOW_WIDTH, SHADOW_HEIGHT);
+		lightCamera = Camera(&shadowViewPort, 0.3, 10, 60);
 
 		//初始化矩阵
 		ViewMatrix = Matrix::identity();
@@ -553,19 +523,19 @@ int main(int argc, char** argv) {
 		std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
 		//创建双缓存
-		ColorVec* drawBuffer = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
-		ColorVec* showBuffer = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
-		ColorVec* temp = NULL;
+		Frame* drawBuffer = new Frame(SCREEN_WIDTH, SCREEN_HEIGHT);
+		Frame* showBuffer = new Frame(SCREEN_WIDTH, SCREEN_HEIGHT);
+		Frame* temp = NULL;
 
 		//创建阴影贴图
 		double* shadowBuffer = new double[SHADOW_WIDTH * SHADOW_HEIGHT];
 		std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
-		ColorVec* shadowTexture = new ColorVec[SHADOW_WIDTH * SHADOW_HEIGHT];
-		std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_HEIGHT, white);
+		Frame* shadowTexture = new Frame(SHADOW_WIDTH, SHADOW_HEIGHT);
+		shadowTexture->fill(white);
 
 		//创建屏幕环境遮罩贴图
-		ColorVec* SSAOTexture = new ColorVec[SCREEN_HEIGHT * SCREEN_WIDTH];
-		std::fill(SSAOTexture, SSAOTexture + SCREEN_HEIGHT * SCREEN_WIDTH, ambientColor);
+		Frame* SSAOTexture = new Frame(SCREEN_WIDTH, SCREEN_HEIGHT);
+		SSAOTexture->fill(white);
 
 		//载入天空盒
 		Model skyboxModle("obj/skybox.obj");
@@ -601,7 +571,8 @@ int main(int argc, char** argv) {
 		//lightPos.z = lightZ;
 		
 		//绘制shadow map
-		drawShadowMap(models, shadowBuffer, shadowTexture);
+		
+		drawShadowMap(models, shadowViewPort, shadowBuffer, shadowTexture);
 
 		Vec3f camPos(1.5, 0.8, 2);
 		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
@@ -632,19 +603,19 @@ int main(int argc, char** argv) {
 			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
 			//清空绘图区域
-			std::fill(drawBuffer, drawBuffer + SCREEN_WIDTH * SCREEN_HEIGHT, black);
-			
-			//清空zbuffer
+			drawBuffer->fill(black);
+			////清空zbuffer
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 			
 
 			//绘制屏幕全局光照贴图
-			//drawSSAOTexture(models, zbuffer, SSAOTexture);
+			//drawSSAOTexture(models, defaultViewPort, zbuffer, SSAOTexture);
 
 			//根据shadow map和SSAO绘制模型
-			draw(models, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
+			draw(models, defaultViewPort, shadowViewPort, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
 
-			drawSkybox(skyboxModle, skyboxFaces, drawBuffer, zbuffer);
+			//绘制天空盒
+			drawSkybox(skyboxModle, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
 			
 			//交换缓存
 			temp = drawBuffer;
@@ -662,11 +633,14 @@ int main(int argc, char** argv) {
 #endif
 		}
 		delete[] zbuffer;
-		delete[] showBuffer;
-		delete[] drawBuffer;
-		delete[] shadowTexture;
 		delete[] shadowBuffer;
-		delete[] SSAOTexture;
+
+
+		delete showBuffer;
+		delete drawBuffer;
+		delete shadowTexture;
+		
+		delete SSAOTexture;
 	}
 	//Free resources and close SDL
 	window.close();
@@ -678,57 +652,4 @@ int main(int argc, char** argv) {
 	SSAO.close();
 #endif
 	return 0;
-}
-
-void drawWindowTGA() {
-	int imageH = 256;
-	int imageW = 256;
-	int midH = imageH / 2;
-	int midW = imageW / 2;
-	int lineW = 10;
-	int halfLineW = lineW/2;
-	TGAImage frame(imageW, imageH, TGAImage::RGBA);
-
-	TGAColor frameColor(100, 80, 100, 255);
-	TGAColor windowColor(0, 200, 255, 128);
-	
-	for (int i = 0; i < imageH; i++) {
-		for (int j = 0; j < imageW; j++) {
-			if ((i < lineW || i >= imageH - lineW)
-				|| (j < lineW || j >= imageW - lineW)
-				|| (i > midH - halfLineW && i <= midH + halfLineW)
-				|| (j > midW - halfLineW && j <= midW + halfLineW)) 
-			{
-				frame.set(i, j, frameColor);
-			}
-			else {
-				frame.set(i, j, windowColor);
-			}
-			
-		}
-	}
-	frame.flip_vertically(); // to place the origin in the bottom left corner of the image
-	frame.write_tga_file("window_diffuse.tga");
-}
-
-
-
-
-void drawFloorTGA() {
-	int imageH = 256;
-	int imageW = 256;
-	int midH = imageH / 2;
-	int midW = imageW / 2;
-	int lineW = 10;
-	int halfLineW = lineW / 2;
-	TGAImage frame(imageW, imageH, TGAImage::RGBA);
-	TGAColor frameColor(100, 30, 0, 255);
-
-	for (int i = 0; i < imageH; i++) {
-		for (int j = 0; j < imageW; j++) {
-			frame.set(i, j, frameColor);
-		}
-	}
-	frame.flip_vertically(); // to place the origin in the bottom left corner of the image
-	frame.write_tga_file("backgroundColorFloor_diffuse.tga");
 }
