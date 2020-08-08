@@ -7,6 +7,7 @@
 #include "model.h"
 #include "KeyboardAndMouseHandle.h"
 #include "SDLWindow.h"
+#include "Light.h"
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 600;
@@ -25,23 +26,26 @@ const Vec4f ambientColor(1, 1, 1, 1);
 const Vec4f white(1, 1, 1, 1);
 const Vec4f black(0, 0, 0, 1);
 
+const float screenGamma = 2.2;
+
 //光源位置
-Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
+//Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
 //Vec3f lightPos(2.2, 3.5, 2);//黑人头
 
-struct Light
-{
-	Vec3f position;
-	Vec3f ambient;
-	Vec3f diffuse;
-	Vec3f specular;
-	float constant;
-	float linear;
-	float quadratic;
-};
-
-Light testLight;
+//struct Light
+//{
+//	Vec3f position = Vec3f(2, 1, -1);
+//	Vec3f ambient = Vec3f(1, 1, 1);
+//	Vec3f diffuse = Vec3f(1, 1, 1);
+//	Vec3f specular = Vec3f(1, 1, 1);
+//	float constant = 1.0f;
+//	float linear = 0.09f;
+//	float quadratic = 0.032f;
+//};
+//
+//Light light;
 //testLight.position =
+
 
 
 //模型指针
@@ -53,124 +57,98 @@ float deltaTime = 0;
 
 //摄像机
 Camera defaultCamera;
-Camera lightCamera;
+//Camera lightCamera;
 
-struct Shader : public IShader {
-	Matrix *LightSpaceMatrix;
-	double* ShadowBuffer;
+struct LightAndShadowShader : public IShader {
 	Frame* SAAOTexture; 
-	ViewPort const* ShadowPort;
-	Shader(Matrix *lightSpaceMatrix, ViewPort const* shadowPort,double* shadowBuffer, Frame* ssao) {
-		LightSpaceMatrix = lightSpaceMatrix;
-		ShadowBuffer = shadowBuffer;
+	std::vector<PointLight>* Lights;
+	Material * Mat;
+
+	bool nullMat;
+	LightAndShadowShader(Frame* ssao,
+		std::vector<PointLight>* lights, Material* mat) {
 		SAAOTexture = ssao;
-		ShadowPort = shadowPort;
+		Lights = lights;
+		if (mat == NULL) {
+			Mat = new Material();
+			nullMat = true;
+		}
+		else {
+			Mat = mat;
+			nullMat = false;
+		}
+	}
+	~LightAndShadowShader(){
+		if (nullMat) {
+			delete Mat;
+		}
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {//对第iface的第nthvert个顶点进行变换
 		//获得模型uv
 		faceVer.uv = modelNow->uv(iface, nthvert);
+		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
 		//法线变换
 		faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(modelNow->normal(iface, nthvert), 0.0f));
 		//世界坐标
-		faceVer.world_pos = proj<3>(ModelMatrix * embed<4>(modelNow->vert(iface, nthvert)));
+		faceVer.world_pos = proj<3>(ModelMatrix * gl_Vertex);
 		//裁切坐标
-		faceVer.clip_coord = MVP * embed<4>(modelNow->vert(iface, nthvert));
+		faceVer.clip_coord = MVP * gl_Vertex;
 	}
 
-	inline float inShadow(Vec3f& world_pos, float& bias) {
-		//计算顶点在光照坐标系的坐标
-		Vec4f clipPosLightSpace = *LightSpaceMatrix * embed<4>(world_pos);
-		//进行透视除法
-		clipPosLightSpace.w = std::max(0.000000001f, clipPosLightSpace.w);
-		float light_recip_w = 1 / clipPosLightSpace.w;
-		Vec3f ndcLightSpace = proj<3>(clipPosLightSpace * light_recip_w);
-		//因为没有进行各种裁切，故这里ndc坐标会溢出
-		//这里默认超出贴图的地方都可以受到光照，直接返回0
-		if (ndcLightSpace.x > 1.0 || ndcLightSpace.x < -1.0)return 0;
-		if (ndcLightSpace.y > 1.0 || ndcLightSpace.y < -1.0)return 0;
-		if (ndcLightSpace.z > 1.0 || ndcLightSpace.z < -1.0)return 0;
-		//变换到阴影贴图的范围
-		Vec3f shadowTextureCoords = ShadowPort->transform(ndcLightSpace);
-		//从缓存中得到最近的深度
-		int x = clamp((int)shadowTextureCoords.x, 0, SHADOW_WIDTH - 1);
-		int y = clamp((int)shadowTextureCoords.y, 0, SHADOW_HEIGHT - 1);
-		int id = x + y* SHADOW_WIDTH;
-		float closestDepth = ShadowBuffer[id];
-		//取得当前片元在光源视角下的深度
-		float currentDepth = shadowTextureCoords.z;
-		if (defaultCamera.getProjectMode()) {
-			//透视投影中需要对z值线性化，避免冲突
-			float near = defaultCamera.getNear();
-			float far = defaultCamera.getFar();
-			closestDepth = LinearizeDepth(closestDepth, near, far);
-			currentDepth = LinearizeDepth(currentDepth, near, far);
-			//std::cout << "ProjectionMode" << defaultCamera.ProjectionMode << std::endl;
-		}
-		//// 检查当前片元是否在阴影中
-		return currentDepth - bias > closestDepth ? 1.0 : 0.0;
-		//return 0;
-	}
 	
 	virtual bool fragment(VerInf& verInf, Vec4f& color) {
 		//插值uv
 		Vec2f uv = verInf.uv;
-		
-		//设置光照
-		float lightPower = 5;
-		Vec4f lightColor(1, 1, 1, 1);
-		Vec4f ambientColor(1,1, 1, 1);
-		Vec4f specColor(1, 1, 1, 1);
 		TGAColor tgaDiff = modelNow->diffuse(uv);
-		Vec4f modleDiffColor(tgaDiff.bgra[2] / 255.f, tgaDiff.bgra[1] / 255.f, tgaDiff.bgra[0] / 255.f, 1);
-
 		//插值法向量
 		//Vec3f normal = verInf.normal;
-
 		//使用法线贴图
 		Vec3f normal = modelNow->normal(uv);
 		normal.normalize();
-		//设置阴影偏移
-		//float bias = std::max(0.1 * (1.0 - diff), 0.005);
-		float bias = 0.11;
-		//计算该点在不在阴影区域
-		float isInShadow = inShadow(verInf.world_pos, bias);
 
+		//设定材质
+		Mat->diffuse = Vec3f(tgaDiff.bgra[2] / 255.f, tgaDiff.bgra[1] / 255.f, tgaDiff.bgra[0] / 255.f);
+		Mat->ambient = Mat->diffuse;
+		Mat->specular = Mat->diffuse;
+		if (nullMat) {
+			Mat->shininess = modelNow->specular(uv);
+		}
+
+		//计算光源反射颜色
+		Vec3f worldPos = verInf.world_pos;
+		Vec3f viewDir = (defaultCamera.getPos() - worldPos).normalize();
+		Vec3f result(0, 0, 0);
+		for (int i = 0; i < (*Lights).size(); i++) {
+			result = result + (*Lights)[i].calcLightColor(normal, worldPos, viewDir, *Mat);
+		}
 		
+		//计算环境光
+		float ambient = (*SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y)).x;
+		//ambient = clamp(ambient, 0.2f, 0.5f);
+		Vec3f ambientColor(1, 1, 1);
+		ambientColor = colorMulit(ambientColor, Mat->diffuse) * ambient;
+		result = result + ambientColor;
+		// use the gamma corrected color in the fragment
+		//for (int i = 0; i < 3; i++) {
+		//	result[i] = pow(result[i], 1.0 / screenGamma);
+		//}
+		
+		color = embed<4>(result, 1.0f);
+		return false;
+	}
+};
 
-		//环境光
-		//float ambient = SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y).x;
-		float ambient = 0.5f;
-		ambient = clamp(ambient, 0.2f, 0.7f);
-		ambientColor = colorMulit(ambientColor, modleDiffColor * ambient);
-		Vec3f vertPos = verInf.world_pos;
+struct PointLightShader : public IShader {
+	PointLight* pointLight;
+	PointLightShader(PointLight* light) {
+		pointLight = light;
+	}
+	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
+		faceVer.clip_coord = MVP * embed<4>(modelNow->vert(iface, nthvert));
+	}
 
-		//衰减
-		Vec3f lightDir = (lightPos - vertPos);
-		float dis = lightDir.norm();
-		float recip_dis = 1.0f / dis;
-		lightDir = lightDir * recip_dis;
-		recip_dis *= recip_dis;
-
-
-		//漫反射
-		float diff = std::max(normal*lightDir,0.0f);
-		Vec4f diffColor = colorMulit(lightColor, modleDiffColor * diff * recip_dis * lightPower * (1 - isInShadow));
-		//std::cout << "diff:" << diff << std::endl;
-
-		//镜面反射强度
-		Vec3f viewDir = (defaultCamera.getPos() - vertPos).normalize();
-		Vec3f hafe = (lightDir + viewDir).normalize();
-		float specPow = modelNow->specular(uv);
-		specPow = specPow < 1 ? 256 : specPow;
-		float spec = pow(std::max(normal * hafe,0.0f), specPow);
-		//计算反射颜色
-		specColor = colorMulit(specColor, modleDiffColor * spec * recip_dis * lightPower * (1 - isInShadow));
-
-
-		color = ambientColor + diffColor + specColor;
-		color = color / 2;
-		color.w = 1;
-		//std::cout << "color:" << color << std::endl;
+	virtual bool fragment(VerInf& verInf, Vec4f& color) {
+		color = embed<4>(pointLight->lightColor,1.0f);
 		return false;
 	}
 };
@@ -182,6 +160,7 @@ struct DepthShader : public IShader {
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
 		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
+		//faceVer.world_pos = proj<3>(ModelMatrix * gl_Vertex);
 		faceVer.clip_coord = *LightSpaceMatrix * ModelMatrix  * gl_Vertex; 
 	}
 
@@ -367,36 +346,40 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 
 }
 
-void drawShadowMap(std::vector<Model>& models, const ViewPort& port, double* shadowBuffer, Frame* shadowTexture) {
+Frame* shadowTexture = new Frame(SHADOW_WIDTH, SHADOW_HEIGHT);
+Matrix lightTemp;
+void drawShadowMap(std::vector<Model>& models,PointLight& light) {
+	if (light.ShadowPort == NULL) {
+		light.ShadowPort = new ViewPort(Vec2i(0, 0), SHADOW_WIDTH, SHADOW_HEIGHT);
+	}
+	//创建阴影贴图
+	if (light.depthBuffer == NULL) {
+		light.depthBuffer = new double[SHADOW_WIDTH * SHADOW_HEIGHT];
+	}
 	//清空shadowMap数据，重新绘制
-	std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
+	std::fill(light.depthBuffer, light.depthBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
 	shadowTexture->fill(white);
-	//std::fill(shadowTexture, shadowTexture + SHADOW_WIDTH * SHADOW_WIDTH, white);
 
 	//启动深度测试
 	enableZTest = true;
 	enableZWrite = true;
 
 	//将摄像机摆放到光源位置
-	//lightCamera.enableProjectMode(false);
-	Vec3f lightPos2 = lightPos;
-	lightCamera.setCamera(lightPos2, center, up);
-	lightCamera.setClipPlane(0.5,8);
-	lightCamera.setFov(40);
+	light.lightCamera.setCamera(light.lightPos, center, up);
+	light.lightCamera.setClipPlane(0.5,8);
+	light.lightCamera.setFov(40);
 
 	//计算矩阵
-	ViewMatrix = lightCamera.getViewMatrix();
-	ProjectionMatrix = lightCamera.getProjMatrix();
-	lightSpaceMatrix = ProjectionMatrix * ViewMatrix;
-	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+	ModelMatrix = Matrix::identity();
+	light.lightMatrix = light.lightCamera.getProjMatrix() * light.lightCamera.getViewMatrix();
+	//MVP = *light.LightSpaceMatrix * ModelMatrix;
 
 	//关闭面剔除
 	enableFaceCulling = false;
-	//enableFrontFaceCulling = true;
 
 	//计算阴影贴图
 	for (int m = 0; m < models.size(); m++) {
-		DepthShader depthshader(&lightSpaceMatrix);
+		DepthShader depthshader(&light.lightMatrix);
 		VerInf faceVer[3];
 		modelNow = &models[m];
 		for (int i = 0; i < modelNow->nfaces(); i++) {
@@ -404,9 +387,9 @@ void drawShadowMap(std::vector<Model>& models, const ViewPort& port, double* sha
 				depthshader.vertex(i, j, faceVer[j]);
 			}
 			triangle(faceVer, depthshader,//传入顶点数据和shader
-					port,//传入屏幕大小用于视窗变换
-					lightCamera.getNear(),lightCamera.getFar(),//传入透视远近平面用于裁切和线性zbuffer
-					shadowBuffer, shadowTexture,//传入绘制buffer
+					*light.ShadowPort,//传入屏幕大小用于视窗变换
+					light.lightCamera.getNear(), light.lightCamera.getFar(),//传入透视远近平面用于裁切和线性zbuffer
+					light.depthBuffer, shadowTexture,//传入绘制buffer
 					false,//是否绘制线框模型
 					false//是否绘雾
 					);
@@ -443,7 +426,7 @@ void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,
 	enableFaceCulling = true;
 }
 
-void draw(std::vector<Model>& models, const ViewPort& port, const ViewPort& shadowPort, Frame* drawBuffer,double* shadowBuffer, double* zbuffer, Frame* SAAOTexture) {
+void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	enableFaceCulling = true;
@@ -453,7 +436,7 @@ void draw(std::vector<Model>& models, const ViewPort& port, const ViewPort& shad
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		Shader shader(&lightSpaceMatrix, &shadowPort, shadowBuffer, SAAOTexture);
+		
 		VerInf faceVer[3];
 		modelNow = &models[m];
 		for (int i = 0; i < modelNow->nfaces(); i++) {
@@ -472,7 +455,39 @@ void draw(std::vector<Model>& models, const ViewPort& port, const ViewPort& shad
 }
 
 
+void drawPointLightPos(Model& cube, std::vector<PointLight>& lights, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
+	float far = defaultCamera.getFar();
+	float near = defaultCamera.getNear();
 
+	//启动正面剔除
+	enableFaceCulling = true;
+
+
+	//绘制zbuffer
+	
+	modelNow = &cube;
+	VerInf faceVer[3];
+	for (int m = 0; m < lights.size(); m++) {
+		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1, 0.1, 0.1);
+		MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+
+		PointLightShader shader(&lights[m]);
+		for (int i = 0; i < modelNow->nfaces(); i++) {
+			for (int j = 0; j < 3; j++) {
+				shader.vertex(i, j, faceVer[j]);
+			}
+			triangle(faceVer, shader, //传入顶点数据和shader
+				port,//传入屏幕大小用于视窗变换
+				near, far, //传入透视远近平面用于裁切和线性zbuffer
+				zbuffer, drawBuffer,//传入绘制buffer
+				false,//是否绘制线框模型
+				false//是否绘雾
+			);
+		}
+	}
+	ModelMatrix = Matrix::identity();
+	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+}
 
 //#define showShadow
 //#define showSSAO
@@ -518,14 +533,12 @@ int main(int argc, char** argv) {
 		//创建相机
 		ViewPort defaultViewPort(Vec2i(0, 0), SCREEN_WIDTH, SCREEN_HEIGHT);
 		defaultCamera = Camera(&defaultViewPort, 0.3, 10, 60);
-		ViewPort shadowViewPort(Vec2i(0, 0), SHADOW_WIDTH, SHADOW_HEIGHT);
-		lightCamera = Camera(&shadowViewPort, 0.3, 10, 60);
+
 
 		//初始化矩阵
 		ViewMatrix = Matrix::identity();
 		ModelMatrix = Matrix::identity();
 		ProjectionMatrix = Matrix::identity();
-		lightSpaceMatrix = Matrix::identity();
 
 		//创建zbuffer
 		double* zbuffer = new double[SCREEN_HEIGHT * SCREEN_WIDTH];
@@ -536,18 +549,12 @@ int main(int argc, char** argv) {
 		Frame* showBuffer = new Frame(SCREEN_WIDTH, SCREEN_HEIGHT);
 		Frame* temp = NULL;
 
-		//创建阴影贴图
-		double* shadowBuffer = new double[SHADOW_WIDTH * SHADOW_HEIGHT];
-		std::fill(shadowBuffer, shadowBuffer + SHADOW_WIDTH * SHADOW_HEIGHT, 1);
-		Frame* shadowTexture = new Frame(SHADOW_WIDTH, SHADOW_HEIGHT);
-		shadowTexture->fill(white);
-
 		//创建屏幕环境遮罩贴图
 		Frame* SSAOTexture = new Frame(SCREEN_WIDTH, SCREEN_HEIGHT);
 		SSAOTexture->fill(white);
 
 		//载入天空盒
-		Model skyboxModle("obj/skybox.obj");
+		Model cube("obj/skybox.obj");
 		std::vector<const char*> skyboxFaceName = {
 			"skybox/left.tga",
 			"skybox/right.tga",
@@ -570,45 +577,57 @@ int main(int argc, char** argv) {
 		//帧计数器
 		int timer = 0;
 		float angle = 0;
-		
-		
 
+		//初始化摄像机
 		Vec3f camPos(1.5, 0.8, 2);
 		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
 		camPos = camPos*0.8;
 		defaultCamera.setCamera(camPos, camCenter, up);
 		
+		//设置光源
+		std::vector<PointLight> pointlights;
+		pointlights.push_back(PointLight(Vec3f(-2, 1, 1),Vec3f(0.2, 0.2, 1), 0.9f, true));
+		pointlights.push_back(PointLight(Vec3f(2, 1, -1),Vec3f(1, 0.2, 0.2), 0.9f, true));
 
 		//While application is running
 		while (KMH.SDL_Runing){
-			//光源旋转
-			angle += 60 * deltaTime;
-			float radio = 2;
-			float lightX = radio * cos(angle * DegToRad);
-			float lightZ = radio * sin(angle * DegToRad);
-			lightPos.x = lightX;
-			lightPos.z = lightZ;
-			lightPos.y = 2;
-			//std::cout << "lightPos:" << lightPos << std::endl;
-			//绘制shadow map
-			drawShadowMap(models, shadowViewPort, shadowBuffer, shadowTexture);
-
 			//计算deltaTime与fps
 			timer++;
 			clock_t currentFrame = clock();
-			deltaTime = float((float)currentFrame - lastFrame)/ CLOCKS_PER_SEC;
+			deltaTime = float((float)currentFrame - lastFrame) / CLOCKS_PER_SEC;
 			lastFrame = currentFrame;
 			if (timer >= 1 / deltaTime) {
 				std::cout << "Current Frames Per Second:" << 1 / deltaTime << std::endl;
 				timer = 0;
 			}
-			
+
 			//处理键鼠事件
-			KMH.getMouseKeyEven(NULL, deltaTime); 
+			KMH.getMouseKeyEven(NULL, deltaTime);
+
+
+
+			//光源旋转
+			for (int i = 0; i < pointlights.size(); i++) {
+				angle += 10 * deltaTime;
+				float angleRad = angle * DegToRad;
+				float radio = 2;
+				float lightX = radio * cos((angle+ i * 180) * DegToRad);
+				float lightZ = radio * sin((angle + i * 180) * DegToRad);
+				pointlights[i].lightPos.x = lightX;
+				pointlights[i].lightPos.z = lightZ;
+				pointlights[i].lightPos.y = 2;
+
+				//绘制shadow map
+				drawShadowMap(models, pointlights[i]);
+			}
+			
+			
+			
 
 			//计算MVP矩阵
 			//首先执行缩放，接着旋转，最后才是平移
 			//ModelMatrix = translate(0, 1, 0) * rotate(up, timer) * scale(1, 1, 1);
+			ModelMatrix = Matrix::identity();
 			ViewMatrix = defaultCamera.getViewMatrix();
 			ProjectionMatrix = defaultCamera.getProjMatrix();
 			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
@@ -622,11 +641,15 @@ int main(int argc, char** argv) {
 			//绘制屏幕全局光照贴图
 			//drawSSAOTexture(models, defaultViewPort, zbuffer, SSAOTexture);
 
+			//绘制光源位置
+			drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
+
 			//根据shadow map和SSAO绘制模型
-			draw(models, defaultViewPort, shadowViewPort, drawBuffer, shadowBuffer, zbuffer, SSAOTexture);
+			LightAndShadowShader shader( SSAOTexture,&pointlights, NULL);
+			draw(models, shader, defaultViewPort, drawBuffer,  zbuffer);
 
 			//绘制天空盒
-			drawSkybox(skyboxModle, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
+			drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
 			
 			//交换缓存
 			temp = drawBuffer;
@@ -644,7 +667,6 @@ int main(int argc, char** argv) {
 #endif
 		}
 		delete[] zbuffer;
-		delete[] shadowBuffer;
 
 
 		delete showBuffer;

@@ -150,6 +150,7 @@
   <ItemGroup>
     <ClInclude Include="camera.h" />
     <ClInclude Include="KeyboardAndMouseHandle.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="myGL.h" />
     <ClInclude Include="myVector.h" />
@@ -159,6 +160,7 @@
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="KeyboardAndMouseHandle.cpp" />
+    <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model.cpp" />
     <ClCompile Include="myGL.cpp" />

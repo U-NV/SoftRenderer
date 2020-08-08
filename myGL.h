@@ -15,7 +15,6 @@ extern Matrix ModelMatrix;
 extern Matrix ViewMatrix;
 extern Matrix ProjectionMatrix;
 extern Matrix MVP;
-extern Matrix lightSpaceMatrix;
 
 extern bool enableFaceCulling;
 extern bool enableFrontFaceCulling;

@@ -6,7 +6,6 @@ Matrix ModelMatrix;
 Matrix ViewMatrix;
 Matrix ProjectionMatrix;
 Matrix MVP;
-Matrix lightSpaceMatrix;
 
 bool enableFaceCulling;
 bool enableFrontFaceCulling;
@@ -287,6 +286,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 				double frag_depth = 1.0;
 				if (enableZTest)
 					frag_depth = interpolate_depth(screen_depths, weights);
+				temp.depth = frag_depth;
+
 
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
@@ -298,7 +299,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 					temp.world_pos = interpolate(verInf[0]->world_pos, verInf[1]->world_pos, verInf[2]->world_pos, weights);
 					temp.normal = interpolate(verInf[0]->normal, verInf[1]->normal, verInf[2]->normal, weights);
 					//temp.ndc_coord = interpolate(verInf[0]->ndc_coord, verInf[1]->ndc_coord, verInf[2]->ndc_coord,weights);
-					temp.depth = frag_depth;
+					
 					temp.screen_coord.x = P.x;
 					temp.screen_coord.y = P.y;
 
