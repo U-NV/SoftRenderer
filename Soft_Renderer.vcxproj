@@ -85,8 +85,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\VS_Project\Soft_Renderer\SDL2-2.0.12\include;D:\VS_Project\Soft_Renderer\SDL2_ttf-2.0.15\include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\VS_Project\Soft_Renderer\SDL2_ttf-2.0.15\lib\x64;D:\VS_Project\Soft_Renderer\SDL2-2.0.12\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>SDL2-2.0.12\include;SDL2_ttf-2.0.15\include;$(IncludePath)</IncludePath>
+    <LibraryPath>SDL2_ttf-2.0.15\lib\x64;SDL2-2.0.12\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
