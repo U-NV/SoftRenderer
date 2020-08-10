@@ -2,6 +2,11 @@
 
 Camera::Camera()
 {
+	aspect = 1.0f;
+	FAR = 10.0f;
+	NEAR = 0.1f;
+	FOVY = 70.0f;
+	targetViewPort = NULL;
 	ProjectionMode = true;
 }
 
@@ -81,7 +86,7 @@ void Camera::setFov(float Fov)
 void Camera::changeViewPort(ViewPort* newViewPort)
 {
 	targetViewPort = newViewPort;
-	aspect = newViewPort->v_width / newViewPort->v_height;
+	aspect = (float)newViewPort->v_width / (float)newViewPort->v_height;
 	ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);
 }
 
@@ -120,9 +125,9 @@ void Camera::rotateCamera(Vec2f offset)
 	if (pitch < -89.0f)
 		pitch = -89.0f;
 
-	camDir.x = cos(pitch * DegToRad) * cos(yaw * DegToRad);
-	camDir.y = sin(pitch * DegToRad);
-	camDir.z = cos(pitch * DegToRad) * sin(yaw * DegToRad);
+	camDir.x = float(cos(pitch * DegToRad) * cos(yaw * DegToRad));
+	camDir.y = float(sin(pitch * DegToRad));
+	camDir.z = float(cos(pitch * DegToRad) * sin(yaw * DegToRad));
 
 	camDir.normalize();
 

@@ -17,10 +17,10 @@ bool enableZWrite;
 TGAColor white(255, 255, 255, 255);
 TGAColor red = TGAColor(255, 0, 0, 255);
 
-float LinearizeDepth(float depth, float near_plane, float far_plane)
+double LinearizeDepth(double depth, float near_plane, float far_plane)
 {
-	float z = depth * 2.0 - 1.0; // Back to NDC 
-	return (2.0f * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));
+	double z = depth * 2.0 - 1.0; // Back to NDC 
+	return (2.0 * (double)near_plane * (double)far_plane) / ((double)far_plane + near_plane - z * ((double)far_plane - near_plane));
 }
 
 inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& factor)
@@ -93,7 +93,7 @@ void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, int width, int height, Frame*
     drawLine(a.x, a.y, b.x, b.y, color, width,height, drawBuffer);
 }
 void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, Frame* drawBuffer) {
-	drawLine(a.x, a.y, b.x, b.y, color, width, height, drawBuffer);
+	drawLine((int)a.x, (int)a.y, (int)b.x, (int)b.y, color, width, height, drawBuffer);
 }
 
 inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
@@ -129,11 +129,11 @@ inline Vec3f calculate_weights(Vec2f& A, Vec2f& B, Vec2f& C, Vec2i& P) {
 	Vec2f ac = C - A;//  = c - a;
 	Vec2f ap(P.x - A.x, P.y - A.y);//  = p - a;
 
-	double factor = 1 / (ab.x * ac.y - ab.y * ac.x);
-	double s = ((double)ac.y * ap.x - (double)ac.x * ap.y) * factor;
-	double t = ((double)ab.x * ap.y - (double)ab.y * ap.x) * factor;
+	float factor = 1 / (ab.x * ac.y - ab.y * ac.x);
+	float s = ((float)ac.y * ap.x - (float)ac.x * ap.y) * factor;
+	float t = ((float)ab.x * ap.y - (float)ab.y * ap.x) * factor;
 
-	return Vec3f(1 - s - t, s, t);
+	return Vec3f(1.0f - s - t, s, t);
 }
 
 inline double interpolate_depth(double* screen_depths, Vec3f& weights) {
@@ -265,11 +265,11 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	Vec2i bboxClamp(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
 
 	for (int i = 0; i < 3; i++) {
-		bboxmin.x = std::max(0, std::min<int>(bboxmin.x, screen_coords[i].x));
-		bboxmin.y = std::max(0, std::min<int>(bboxmin.y, screen_coords[i].y));
+		bboxmin.x = std::max(0, std::min<int>(bboxmin.x, (int)screen_coords[i].x));
+		bboxmin.y = std::max(0, std::min<int>(bboxmin.y, (int)screen_coords[i].y));
 
-		bboxmax.x = std::min(bboxClamp.x, std::max<int>(bboxmax.x, screen_coords[i].x));
-		bboxmax.y = std::min(bboxClamp.y, std::max<int>(bboxmax.y, screen_coords[i].y));
+		bboxmax.x = std::min(bboxClamp.x, std::max<int>(bboxmax.x, (int)screen_coords[i].x));
+		bboxmax.y = std::min(bboxClamp.y, std::max<int>(bboxmax.y, (int)screen_coords[i].y));
 	}
 
 	Vec2i P(0, 0);
@@ -293,7 +293,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
-					for (int i = 0; i < 3; i++) weights[i] = weights[i] * verInf[i]->recip_w;
+					for (int i = 0; i < 3; i++) weights[i] = weights[i] * (float)verInf[i]->recip_w;
 					weights = weights / (weights[0] + weights[1] + weights[2]);
 					
 					//为面元着色器准备参数
@@ -352,11 +352,11 @@ void triangle(VerInf* vertexs, IShader& shader,
 		clipingVertexs[i].ndc_coord = proj<3>(clipingVertexs[i].clip_coord) * clipingVertexs[i].recip_w;
 	}
 
-	int n = clipingVertexs.size() - 3 + 1;
+	int n = int(clipingVertexs.size() - 3 + 1);
 	for (int i = 0; i < n; i++) {
 		verList[0] = &clipingVertexs[0];
-		verList[1] = &clipingVertexs[i + 1];
-		verList[2] = &clipingVertexs[i + 2];
+		verList[1] = &clipingVertexs[__int64(i) + 1];
+		verList[2] = &clipingVertexs[__int64(i) + 2];
 
 		if (enableFaceCulling && is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
 			return;
@@ -369,7 +369,7 @@ void triangle(VerInf* vertexs, IShader& shader,
 
 }
 
-Matrix translate(double x, double y, double z) {
+Matrix translate(float x, float y, float z) {
 	Matrix t;
 	t = Matrix::identity();
 	t[0][3] = x;
@@ -378,7 +378,7 @@ Matrix translate(double x, double y, double z) {
 	return t;
 };
 
-Matrix scale(double x, double y, double z) {
+Matrix scale(float x, float y, float z) {
 	Matrix t;
 	t= Matrix::identity();
 	t[0][0] = x;
@@ -387,39 +387,37 @@ Matrix scale(double x, double y, double z) {
 	return t;
 };
 
-Matrix rotate(Vec3f &axis,double theta) {
+Matrix rotate(Vec3f &axis, float theta) {
 	Matrix t;
 	axis.normalize();
 
-	theta = theta * PI / 180.0;
-	double cosTheta = std::cos(theta);
-	double sinTheta = std::sin(theta);
+	theta = theta * PI / 180.0f;
+	float cosTheta = std::cos(theta);
+	float sinTheta = std::sin(theta);
 
-	//std::cout << "sinAngle:" << sinTheta << std::endl;
-	//std::cout << "cosAngle:" << cosTheta << std::endl;
-	double u = axis[0];
-	double v = axis[1];
-	double w = axis[2];
+	float u = axis[0];
+	float v = axis[1];
+	float w = axis[2];
 
-	t[0][0] = cosTheta + (u * u) * (1. - cosTheta);
-	t[0][1] = u * v * (1. - cosTheta) + w * sinTheta;
-	t[0][2] = u * w * (1.- cosTheta) - v * sinTheta;
-	t[0][3] = 0;
+	t[0][0] = cosTheta + u * u * (1.0f - cosTheta);
+	t[0][1] = u * v * (1.0f - cosTheta) + w * sinTheta;
+	t[0][2] = u * w * (1.0f - cosTheta) - v * sinTheta;
+	t[0][3] = 0.0f;
 
-	t[1][0] = u * v * (1. - cosTheta) - w * sinTheta;
+	t[1][0] = u * v * (1.0f - cosTheta) - w * sinTheta;
 	t[1][1] = cosTheta + v * v * (1 - cosTheta);
-	t[1][2] = w * v * (1. - cosTheta) + u * sinTheta;
-	t[1][3] = 0;
+	t[1][2] = w * v * (1.0f - cosTheta) + u * sinTheta;
+	t[1][3] = 0.0f;
 
-	t[2][0] = u * w * (1. - cosTheta) + v * sinTheta;
-	t[2][1] = v * w * (1. - cosTheta) - u * sinTheta;
-	t[2][2] = cosTheta + w * w * (1. - cosTheta);
-	t[2][3] = 0;
+	t[2][0] = u * w * (1.0f - cosTheta) + v * sinTheta;
+	t[2][1] = v * w * (1.0f - cosTheta) - u * sinTheta;
+	t[2][2] = cosTheta + w * w * (1.0f - cosTheta);
+	t[2][3] = 0.0f;
 
-	t[3][0] = 0;
-	t[3][1] = 0;
-	t[3][2] = 0;
-	t[3][3] = 1;
+	t[3][0] = 0.0f;
+	t[3][1] = 0.0f;
+	t[3][2] = 0.0f;
+	t[3][3] = 1.0f;
 
 	return t;
 };
@@ -462,9 +460,9 @@ Matrix lookat(Vec3f &eye, Vec3f& center, Vec3f& up){
 //	return matrix;
 //}
 
-Matrix setFrustum(double fovy, double aspect, double near, double far)
+Matrix setFrustum(float fovy, float aspect, float near, float far)
 {
-	double z_range = far - near;
+	float z_range = far - near;
 	Matrix matrix;
 	matrix= Matrix::identity();
 	assert(fovy > 0 && aspect > 0);
@@ -472,7 +470,7 @@ Matrix setFrustum(double fovy, double aspect, double near, double far)
 	matrix[1][1] = 1 / (float)tan(fovy / 2);
 	matrix[0][0] = matrix[1][1] / aspect;
 	matrix[2][2] = -(near + far) / z_range;
-	matrix[2][3] = -2 * near * far / z_range;
+	matrix[2][3] = -2.0f * near * far / z_range;
 	matrix[3][2] = -1;
 	matrix[3][3] = 0;
 
@@ -491,15 +489,15 @@ Matrix mat4_orthographic(float right, float top, float near, float far) {
 }
 
 
-Matrix projection(double width, double height, double zNear, double zFar) {
+Matrix projection(float width, float height, float zNear, float zFar) {
 	Matrix projection;
-	double r = width / 2.0;
-	double t = height / 2.0;
+	float r = width / 2.0f;
+	float t = height / 2.0f;
 	projection[0][0] = zNear / r;
 	projection[1][1] = zNear / t;
-	projection[2][2] = -1*(zFar+zNear) /(zFar-zNear);
-	projection[2][3] = -2*zFar*zNear / (zFar-zNear);
-	projection[3][2] = -1;
+	projection[2][2] = -1.0f *(zFar+zNear) /(zFar-zNear);
+	projection[2][3] = -2.0f*zFar*zNear / (zFar-zNear);
+	projection[3][2] = -1.0f;
 	return projection;
 }
 
@@ -511,7 +509,7 @@ Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f dir) {
 	else maxDir *= 2;
 	float screen_coord[2];
 	for (int i = 0; i < 3; i++) {
-		dir[i] = (dir[i] + 1) * 0.5;
+		dir[i] = (dir[i] + 1) * 0.5f;
 	}
 	switch (maxDir) {
 	case 0://+x
@@ -554,9 +552,9 @@ Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f dir) {
 
 Vec3f ViewPort::transform(Vec3f& ndc_coord)const
 {
-	double x = v_pos.x + double((double)ndc_coord.x + 1.0f) * 0.5f * (double)v_width;   /* [-1, 1] -> [0, w] */
-	double y = v_pos.y + double((double)ndc_coord.y + 1.0f) * 0.5f * (double)v_height;  /* [-1, 1] -> [0, h] */
-	double z = double((double)ndc_coord.z + 1.0f) * 0.5f;                  /* [-1, 1] -> [0, 1] */
+	float x = v_pos.x + (ndc_coord.x + 1.0f) * 0.5f * (float)v_width;   /* [-1, 1] -> [0, w] */
+	float y = v_pos.y + (ndc_coord.y + 1.0f) * 0.5f * (float)v_height;  /* [-1, 1] -> [0, h] */
+	float z = (ndc_coord.z + 1.0f) * 0.5f;                  /* [-1, 1] -> [0, 1] */
 	return Vec3f(x, y, z);
 }
 
@@ -598,7 +596,7 @@ Vec4f* Frame::getPixel(int& x, int& y) {
 
 void Frame::fill(const Vec4f& defaultColor)
 {
-	std::fill(buffer, buffer + f_width * f_height, defaultColor);
+	std::fill(buffer, buffer + (__int64(f_width) * __int64(f_height)), defaultColor);
 }
 
 //https://www.cnblogs.com/bluebean/p/5299358.html

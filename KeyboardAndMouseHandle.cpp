@@ -2,8 +2,8 @@
 
 KeyboardAndMouseHandle::KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera, float* gamma, float* exposure)
 {
-	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+	MousePosNow = Vec2f((float)SCREEN_WIDTH / 2.0f, (float)SCREEN_HEIGHT / 2.0f);
+	MousePosNow = Vec2f((float)SCREEN_WIDTH / 2.0f, (float)SCREEN_HEIGHT / 2.0f);
 	controlCamera = camera;
 	this->gamma = gamma;
 	this->exposure = exposure;
@@ -35,18 +35,18 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 	}
 	
 	if (keysEvent[SDLK_COMMA]) { //<
-		*gamma -= 0.05;
+		*gamma -= 0.05f;
 		std::cout << "Gamma:" << *gamma << std::endl;
 	}if (keysEvent[SDLK_PERIOD]) {//>
-		*gamma += 0.05;
+		*gamma += 0.05f;
 		std::cout << "Gamma:" << *gamma << std::endl;
 	}
 	
 	if (keysEvent[SDLK_LEFTBRACKET]) { //"["
-		*exposure -= 0.05;
+		*exposure -= 0.05f;
 		std::cout << "exposure:" << *exposure << std::endl;
 	}if (keysEvent[SDLK_RIGHTBRACKET]) {//']'
-		*exposure += 0.05;
+		*exposure += 0.05f;
 		std::cout << "exposure:" << *exposure << std::endl;
 	}
 
@@ -54,7 +54,7 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 		Vec2f offset = MousePosNow - MousePosPre;
 		MousePosPre = MousePosNow;
 
-		double sensitivity = 10;
+		float sensitivity = 10;
 		offset.x *= sensitivity;
 		offset.y *= sensitivity;
 
@@ -87,8 +87,8 @@ int KeyboardAndMouseHandle::getMouseKeyEven(void* opaque, float deltaTime)
 				keysEvent[event.key.keysym.sym] = false;
 			break;
 		case SDL_MOUSEMOTION:
-			MousePosNow.x = event.motion.x;
-			MousePosNow.y = SCREEN_HEIGHT - event.motion.y;
+			MousePosNow.x = (float)event.motion.x;
+			MousePosNow.y = SCREEN_HEIGHT - (float)event.motion.y;
 			//printf("x, y %d %d ...............\n", MousePosNow.x, MousePosNow.y);
 			break;
 		case SDL_MOUSEWHEEL:

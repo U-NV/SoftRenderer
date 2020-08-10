@@ -169,7 +169,7 @@ bool TGAImage::write_tga_file(const char* filename, bool rle) {
         return false;
     }
     if (!rle) {
-        out.write((char*)data, width * height * bytespp);
+        out.write((char*)data, (__int64)width * (__int64)height * (__int64)bytespp);
         if (!out.good()) {
             std::cerr << "can't unload raw data\n";
             out.close();
@@ -252,7 +252,7 @@ TGAColor TGAImage::get(int x, int y) {
     if (!data || x < 0 || y < 0 || x >= width || y >= height) {
         return TGAColor();
     }
-    TGAColor color(data + (x + y * width) * bytespp, bytespp);
+    TGAColor color(data + ((__int64)x + (__int64)y * width) * bytespp, bytespp);
     for (int i = bytespp; i < 4; i++)
         color[i] = 255;
     return color;
@@ -262,7 +262,7 @@ bool TGAImage::set(int x, int y, TGAColor& c) {
     if (!data || x < 0 || y < 0 || x >= width || y >= height) {
         return false;
     }
-    memcpy(data + (x + y * width) * bytespp, c.bgra, bytespp);
+    memcpy(data + ((__int64)x + (__int64)y * width) * bytespp, c.bgra, bytespp);
     return true;
 }
 
@@ -270,7 +270,7 @@ bool TGAImage::set(int x, int y, const TGAColor& c) {
     if (!data || x < 0 || y < 0 || x >= width || y >= height) {
         return false;
     }
-    memcpy(data + (x + y * width) * bytespp, c.bgra, bytespp);
+    memcpy(data + ((__int64)x + (__int64)y * width) * bytespp, c.bgra, bytespp);
     return true;
 }
 
@@ -321,12 +321,12 @@ unsigned char* TGAImage::buffer() {
 }
 
 void TGAImage::clear() {
-    memset((void*)data, 0, width * height * bytespp);
+    memset((void*)data, 0,(__int64)width * height * bytespp);
 }
 
 bool TGAImage::scale(int w, int h) {
     if (w <= 0 || h <= 0 || !data) return false;
-    unsigned char* tdata = new unsigned char[w * h * bytespp];
+    unsigned char* tdata = new unsigned char[(__int64)w * h * (__int64)bytespp];
     int nscanline = 0;
     int oscanline = 0;
     int erry = 0;
@@ -361,52 +361,52 @@ bool TGAImage::scale(int w, int h) {
     return true;
 }
 
-float* gaussian_kernel(const int radius) {
-    int size = (radius * 2) + 1;
-    float norm = 1.f / (std::sqrt(2.f * PI) * radius);
-    float* gaussian_kernel = new float[size];
-    float coeff = -1.f / (2.f * radius * radius);
-
-    float sum = 0.f;
-    for (int i = 0; i < size; i++) {
-        gaussian_kernel[i] = norm * exp(powl(i - radius, 2) * coeff);
-        sum += gaussian_kernel[i];
-    }
-    for (int i = size; i--; gaussian_kernel[i] /= sum);
-    return gaussian_kernel;
-}
-
-void TGAImage::gaussian_blur(const int radius) {
-    float* kernel = gaussian_kernel(radius);
-    TGAImage tmp(*this);
-    int size = (radius * 2) + 1;
-    for (int j = size; j < get_height(); j++) {
-        for (int i = 0; i < get_width(); i++) {
-            float BGRA[4] = { 0,0,0,0 };
-            for (int k = 0; k < size; k++) {
-                TGAColor c = get(i, j - size + k);
-                for (int d = 0; d < bytespp; d++) BGRA[d] += float(c[d]) * kernel[k];
-            }
-            unsigned char cBGRA[4];
-            for (int i = 4; i--; cBGRA[i] = (unsigned char)BGRA[i]);
-            tmp.set(i, j, TGAColor(cBGRA, bytespp));
-        }
-    }
-    for (int j = 0; j < get_height(); j++) {
-        for (int i = size; i < get_width(); i++) {
-            float BGRA[4] = { 0,0,0,0 };
-            for (int k = 0; k < size; k++) {
-                TGAColor c = tmp.get(i - size + k, j);
-                for (int d = 0; d < bytespp; d++) BGRA[d] += float(c[d]) * kernel[k];
-            }
-            unsigned char cBGRA[4];
-            for (int i = 4; i--; cBGRA[i] = (unsigned char)BGRA[i]);
-            set(i, j, TGAColor(cBGRA, bytespp));
-        }
-    }
-    delete[] kernel;
-}
-
+//float* gaussian_kernel(const int radius) {
+//    int size = (radius * 2) + 1;
+//    float norm = 1.f / (std::sqrt(2.f * PI) * radius);
+//    float* gaussian_kernel = new float[size];
+//    float coeff = -1.f / (2.f * radius * radius);
+//
+//    float sum = 0.f;
+//    for (int i = 0; i < size; i++) {
+//        gaussian_kernel[i] = norm * exp(powl(i - radius, 2) * coeff);
+//        sum += gaussian_kernel[i];
+//    }
+//    for (int i = size; i--; gaussian_kernel[i] /= sum);
+//    return gaussian_kernel;
+//}
+//
+//void TGAImage::gaussian_blur(const int radius) {
+//    float* kernel = gaussian_kernel(radius);
+//    TGAImage tmp(*this);
+//    int size = (radius * 2) + 1;
+//    for (int j = size; j < get_height(); j++) {
+//        for (int i = 0; i < get_width(); i++) {
+//            float BGRA[4] = { 0,0,0,0 };
+//            for (int k = 0; k < size; k++) {
+//                TGAColor c = get(i, j - size + k);
+//                for (int d = 0; d < bytespp; d++) BGRA[d] += float(c[d]) * kernel[k];
+//            }
+//            unsigned char cBGRA[4];
+//            for (int i = 4; i--; cBGRA[i] = (unsigned char)BGRA[i]);
+//            tmp.set(i, j, TGAColor(cBGRA, bytespp));
+//        }
+//    }
+//    for (int j = 0; j < get_height(); j++) {
+//        for (int i = size; i < get_width(); i++) {
+//            float BGRA[4] = { 0,0,0,0 };
+//            for (int k = 0; k < size; k++) {
+//                TGAColor c = tmp.get(i - size + k, j);
+//                for (int d = 0; d < bytespp; d++) BGRA[d] += float(c[d]) * kernel[k];
+//            }
+//            unsigned char cBGRA[4];
+//            for (int i = 4; i--; cBGRA[i] = (unsigned char)BGRA[i]);
+//            set(i, j, TGAColor(cBGRA, bytespp));
+//        }
+//    }
+//    delete[] kernel;
+//}
+//
 
 
 void drawWindowTGA() {

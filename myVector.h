@@ -10,7 +10,10 @@
 template<size_t DimCols, size_t DimRows, typename T> class mat;
 
 template <size_t DIM, typename T> struct vec {
-    vec() { for (size_t i = DIM; i--; data_[i] = T()); }
+    vec() { 
+        //for (size_t i = DIM; i--; data_[i] = T()); 
+        std::fill(data_, data_ + DIM, T());
+    }
     T& operator[](const size_t i) { assert(i < DIM); return data_[i]; }
     const T& operator[](const size_t i) const { assert(i < DIM); return data_[i]; }
 private:
@@ -101,7 +104,7 @@ template<size_t DIM, typename T>vec<DIM, T> operator-(vec<DIM, T> lhs, const vec
 }
 
 template<size_t DIM, typename T, typename U> vec<DIM, T> operator*(vec<DIM, T> lhs, const U& rhs) {
-    for (size_t i = DIM; i--; lhs[i] *= rhs);
+    for (size_t i = DIM; i--; lhs[i] *= (T)rhs);
     return lhs;
 }
 

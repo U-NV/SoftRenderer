@@ -8,14 +8,14 @@ struct Material
 	Vec3f ambient;
 	Vec3f diffuse;
 	Vec3f specular;
-	float shininess;
+	float shininess = 32;
 };
 
 class Light
 {
 public:
-	Vec3f lightColor;
-	float lightPower;
+	Vec3f lightColor = Vec3f(1.0f, 1.0f, 1.0f);
+	float lightPower = 1.0f ;
 
 
 	//shadow
@@ -27,7 +27,7 @@ public:
 	ViewPort* ShadowPort = NULL;
 	
 
-	inline float beIlluminated(const Vec3f& world_pos, float bias);
+	inline float beIlluminated(const Vec3f& world_pos, double bias);
 	virtual Vec3f calcLightColor(const Vec3f& normal, const  Vec3f& worldPos, const  Vec3f& viewDir, const  Material& material) = 0;
 
 	~Light() {

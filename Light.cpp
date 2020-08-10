@@ -1,6 +1,6 @@
 #include "Light.h"
 
-inline float Light::beIlluminated(const Vec3f& world_pos, float bias) {
+inline float Light::beIlluminated(const Vec3f& world_pos, double bias) {
 	//计算顶点在光照坐标系的坐标
 	Vec4f clipPosLightSpace = lightMatrix * embed<4>(world_pos,1.0f);
 	//进行透视除法
@@ -18,10 +18,10 @@ inline float Light::beIlluminated(const Vec3f& world_pos, float bias) {
 	int x = clamp((int)shadowTextureCoords.x, 0, ShadowPort->v_width - 1);
 	int y = clamp((int)shadowTextureCoords.y, 0, ShadowPort->v_height - 1);
 	int id = x + y * ShadowPort->v_width;
-	float closestDepth = depthBuffer[id];
+	double closestDepth = depthBuffer[id];
 
 	//取得当前片元在光源视角下的深度
-	float currentDepth = shadowTextureCoords.z;
+	double currentDepth = shadowTextureCoords.z;
 	//if (lightCamera->getProjectMode()) {
 	//	//透视投影中需要对z值线性化，避免冲突
 	//	float near = lightCamera->getNear();
@@ -31,7 +31,7 @@ inline float Light::beIlluminated(const Vec3f& world_pos, float bias) {
 	//	//std::cout << "ProjectionMode" << defaultCamera.ProjectionMode << std::endl;
 	//}
 	//// 检查当前片元是否在阴影中
-	return currentDepth - bias >= closestDepth ? 0.0 : 1.0;
+	return float(currentDepth - bias >= closestDepth ? 0.0 : 1.0);
 	//return 0;
 }
 
@@ -65,7 +65,7 @@ Vec3f PointLight::calcLightColor(const Vec3f& normal, const  Vec3f& worldPos, co
 
 	//计算该点在不在阴影区域
 	if (enableShadow) {
-		float bias = std::max(0.01 * (1.0 - diff), 0.001);
+		double bias = std::max(0.01 * (1.0 - diff), 0.001);
 		return (diffColor + specColor) * beIlluminated(worldPos, bias);
 	}
 	else {
@@ -88,7 +88,7 @@ Vec3f DirLight::calcLightColor(const Vec3f& normal, const  Vec3f& worldPos, cons
 
 	//计算该点在不在阴影区域
 	if (enableShadow) {
-		float bias = std::max(0.1 * (1.0 - diff), 0.005);
+		double bias = std::max(0.1 * (1.0 - diff), 0.005);
 		return (diffColor + specColor) * beIlluminated(worldPos, bias);
 	}
 	else {

@@ -7,9 +7,9 @@
 #include <vector>
 #include <algorithm>
 
-#define PI 2*acos(0.0)
-#define DegToRad PI/180.0
-#define EPSILON 1e-5
+#define PI float(2*acos(0.0))
+#define DegToRad PI/180.0f
+#define EPSILON float(1e-5)
 
 extern Matrix ModelMatrix;
 extern Matrix ViewMatrix;
@@ -44,8 +44,8 @@ public:
 
 	Vec2i screen_coord;
 
-	double depth;
-	double recip_w;
+	double depth = 1.0f;
+	double recip_w = 1.0f;
 	//double light_recip_w;
 	
 	//Vec4f clipPosLightSpace;
@@ -61,20 +61,20 @@ struct IShader {
 };
 
 //模型矩阵
-Matrix translate(double x, double y, double z);
-Matrix rotate(Vec3f& axis, double theta);
-Matrix scale(double x, double y, double z);
+Matrix translate(float x, float y, float z);
+Matrix rotate(Vec3f& axis, float theta);
+Matrix scale(float x, float y, float z);
 
 //视图矩阵
 Matrix lookat(Vec3f& eye, Vec3f& center, Vec3f& up);
 
 //透视矩阵
-Matrix projection(double width, double height, double zNear, double zFar);
+Matrix projection(float width, float height, float zNear, float zFar);
 /*Matrix setFrustum(double l, double r, double b, double t, double n, double f);*/
-Matrix setFrustum(double fovY, double aspectRatio, double front, double back);
+Matrix setFrustum(float fovY, float aspectRatio, float front, float back);
 Matrix mat4_orthographic(float right, float top, float near, float far);
 
-float LinearizeDepth(float depth, float near, float far);
+double LinearizeDepth(double depth, float near, float far);
 
 //视窗变换
 class ViewPort

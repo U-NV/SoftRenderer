@@ -3,8 +3,6 @@
 
 #include <fstream>
 
-#define PI 2*acos(0.0)
-
 #pragma pack(push,1)
 struct TGA_Header {
     char idlength;
@@ -57,7 +55,7 @@ struct TGAColor {
     TGAColor operator *(float intensity) const {
         TGAColor res = *this;
         intensity = (intensity > 1.f ? 1.f : (intensity < 0.f ? 0.f : intensity));
-        for (int i = 0; i < 3; i++) res.bgra[i] = bgra[i] * intensity;
+        for (int i = 0; i < 3; i++) res.bgra[i] = unsigned char(float(bgra[i]) * intensity);
         return res;
     }
     

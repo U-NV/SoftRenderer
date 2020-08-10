@@ -28,27 +28,11 @@ const Vec4f ambientColor(1, 1, 1, 1);
 const Vec4f white(1, 1, 1, 1);
 const Vec4f black(0, 0, 0, 1);
 
-float screenGamma = 0.8;
-float exposure = 1;
+float screenGamma = 0.8f;
+float exposure = 1.0f;
 //光源位置
 //Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
 //Vec3f lightPos(2.2, 3.5, 2);//黑人头
-
-//struct Light
-//{
-//	Vec3f position = Vec3f(2, 1, -1);
-//	Vec3f ambient = Vec3f(1, 1, 1);
-//	Vec3f diffuse = Vec3f(1, 1, 1);
-//	Vec3f specular = Vec3f(1, 1, 1);
-//	float constant = 1.0f;
-//	float linear = 0.09f;
-//	float quadratic = 0.032f;
-//};
-//
-//Light light;
-//testLight.position =
-
-
 
 //模型指针
 Model* modelNow;
@@ -79,7 +63,6 @@ struct diffuseTextureShader : public IShader {
 		return false;
 	}
 };
-
 
 struct reflectSkyboxShader : public IShader {
 	Material* Mat;
@@ -146,7 +129,7 @@ struct reflectSkyboxShader : public IShader {
 			// Reinhard色调映射
 			//	mapped[i] = hdrColor[i] / (hdrColor[i] + 1);
 			// 曝光色调映射
-			mapped[i] = 1.0 - exp(-hdrColor[i] * exposure);
+			mapped[i] = float(1.0f - exp(float (-hdrColor[i]) * exposure));
 		}
 
 		color = embed<4>(mapped, tgaDiff.bgra[3] / 255.f);
@@ -182,8 +165,7 @@ struct LightAndShadowShader : public IShader {
 		faceVer.uv = modelNow->uv(iface, nthvert);
 		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
 		//法线变换
-		//faceVer.normal = proj<3>(normalMatrix * embed<4>(modelNow->normal(iface, nthvert), 0.0f));
-		//faceVer.normal = proj<3>(MVP.invert_transpose() * embed<4>(modelNow->normal(iface, nthvert), 0.0f));
+		faceVer.normal = proj<3>(normalMatrix * embed<4>(modelNow->normal(iface, nthvert), 0.0f));
 		//世界坐标
 		faceVer.world_pos = proj<3>(ModelMatrix * gl_Vertex);
 		//裁切坐标
@@ -229,7 +211,7 @@ struct LightAndShadowShader : public IShader {
 		// Reinhard色调映射
 		//	mapped[i] = hdrColor[i] / (hdrColor[i] + 1);
 		// 曝光色调映射
-			mapped[i] = 1.0 - exp(-hdrColor[i] * exposure);
+			mapped[i] = 1.0f - exp(-hdrColor[i] * exposure);
 		}
 
 		color = embed<4>(mapped, tgaDiff.bgra[3] / 255.f);
@@ -254,8 +236,10 @@ struct PointLightShader : public IShader {
 
 struct DepthShader : public IShader {
 	Matrix* LightSpaceMatrix;
-	DepthShader(Matrix* lightSpaceMatrix) {
+	Camera* DepthCamera;
+	DepthShader(Matrix* lightSpaceMatrix, Camera* depthCamera) {
 		LightSpaceMatrix = lightSpaceMatrix;
+		DepthCamera = depthCamera;
 	}
 	virtual void vertex(int iface, int nthvert, VerInf& faceVer) {
 		Vec4f gl_Vertex = embed<4>(modelNow->vert(iface, nthvert));
@@ -264,12 +248,13 @@ struct DepthShader : public IShader {
 	}
 
 	virtual bool fragment(VerInf& verInf, Vec4f& color) {
-		//if (lightCamera.getProjectMode()) {
-		//	float far = lightCamera.getFar();
-		//	float near = lightCamera.getNear();
-		//	verInf.depth = LinearizeDepth(verInf.depth,near, far)/ far;
-		//}
+		if (DepthCamera->getProjectMode()) {
+			float far = DepthCamera->getFar();
+			float near = DepthCamera->getNear();
+			verInf.depth = LinearizeDepth(verInf.depth,near, far)/ far;
+		}
 		color = Vec4f(1, 1, 1,1) * verInf.depth;
+		color.w = 1;
 		return false;
 	}
 };
@@ -323,45 +308,45 @@ float max_elevation_angle(double* zbuffer, float radio, float near, float far, V
 		//if (abs(orgZ - nearZ) >= 0.2)continue;
 		//double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
 		//float elevation = nearZ/ far - orgZ / far;
-		float elevation = nearZ - orgZ;
+		float elevation = float(nearZ - orgZ);
 		//if (elevation >= 0.2) continue;
 		maxangle = std::max(maxangle, atanf(elevation / distance));
 	}
 	return maxangle;
 }
 
-float deepSampling(double* zbuffer, int radio, float near, float far, Vec2f& p) {
-	float orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far)/ far;
-	//std::cout << "orgZ" << orgZ << std::endl;
-	float max = 0;
-	int count = 0;
-	for (int x = -radio; x <= radio; x += 1) {
-		for (int y = -radio; y <= radio; y += 1) {
-			int tempX = clamp<int>(p.x + x, 0, SCREEN_WIDTH-1);
-			int tempY = clamp<int>(p.y + y, 0, SCREEN_HEIGHT-1);
-			float diff = LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far)/ far - orgZ;
-			if (abs(diff) > 0.001)diff = 0;
-			max = abs(diff)> abs(max)?diff:max;
-			//if (orgZ < 0.98) {
-			//	std::cout << "orgZ(" << int(p.x) << "," << int(p.y) << "):" << orgZ << std::endl;
-			//	std::cout << "near(" << tempX << "," << tempY << "):" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far << std::endl;
-			//	std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-			//	std::cout << "sum" << sum << std::endl;
-			//}
-			
-			//std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-			//std::cout << "sum" << sum << std::endl;
-			count++;
-		}
-	}
-	//std::cout << "Sampling num" << count << std::endl;
-	//std::cout << "totle num" << sum << std::endl;
-	//sum /= float((radio * 2 + 1) * (radio * 2 + 1));
-	max = max*100 +0.5;
-	//sum = pow(sum, 2);
-	//std::cout << "deepSampling" << sum << std::endl << std::endl;
-	return max;
-}
+//float deepSampling(double* zbuffer, int radio, float near, float far, Vec2f& p) {
+//	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far)/ far;
+//	//std::cout << "orgZ" << orgZ << std::endl;
+//	float max = 0;
+//	int count = 0;
+//	for (int x = -radio; x <= radio; x += 1) {
+//		for (int y = -radio; y <= radio; y += 1) {
+//			int tempX = clamp<int>(p.x + x, 0, SCREEN_WIDTH-1);
+//			int tempY = clamp<int>(p.y + y, 0, SCREEN_HEIGHT-1);
+//			float diff = LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far)/ far - orgZ;
+//			if (abs(diff) > 0.001)diff = 0;
+//			max = abs(diff)> abs(max)?diff:max;
+//			//if (orgZ < 0.98) {
+//			//	std::cout << "orgZ(" << int(p.x) << "," << int(p.y) << "):" << orgZ << std::endl;
+//			//	std::cout << "near(" << tempX << "," << tempY << "):" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far << std::endl;
+//			//	std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
+//			//	std::cout << "sum" << sum << std::endl;
+//			//}
+//			
+//			//std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
+//			//std::cout << "sum" << sum << std::endl;
+//			count++;
+//		}
+//	}
+//	//std::cout << "Sampling num" << count << std::endl;
+//	//std::cout << "totle num" << sum << std::endl;
+//	//sum /= float((radio * 2 + 1) * (radio * 2 + 1));
+//	max = max*100 +0.5f;
+//	//sum = pow(sum, 2);
+//	//std::cout << "deepSampling" << sum << std::endl << std::endl;
+//	return max;
+//}
 
 void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zbuffer, Frame* SSAOTexture) {
 	//清空drawbuffer，绘制新的画面
@@ -405,20 +390,20 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 	//	}
 	//}
 	//计算SAAO
-	float halfPI = M_PI / 2;
+	float halfPI = (float)M_PI / 2.0f;
 	int samplingDir = 4;
-	int dirChangeAlmont = M_PI * 2/samplingDir;
+	float dirChangeAlmont = (float)M_PI * 2.0f/samplingDir;
 	
 	Vec2f dirList[4];
 	for (int i = 0; i < samplingDir; i++) {
-		float a = dirChangeAlmont * i;
+		float a = float (dirChangeAlmont * i);
 		dirList[i] = Vec2f(cos(a), sin(a));
 	}
 	Vec2f posNow(0, 0);
 	Vec4f temp;
 	for (posNow.x = 0; posNow.x < SCREEN_WIDTH; posNow.x++) {
 		for (posNow.y = 0; posNow.y < SCREEN_HEIGHT; posNow.y++) {
-			int id = posNow.x + posNow.y * SCREEN_WIDTH;
+			int id = (int)posNow.x + (int)posNow.y * SCREEN_WIDTH;
 			//if (zbuffer[id] >=1) continue;
 			float total = 0;
 			
@@ -435,8 +420,8 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 			temp.z = total * 255;
 			temp.w = 255;
 
-			int x = posNow.x;
-			int y = posNow.y;
+			int x = (int)posNow.x;
+			int y = (int)posNow.y;
 			SSAOTexture->setPixel(x,y, temp);
 
 		}
@@ -479,7 +464,7 @@ void drawShadowMap(std::vector<Model>& models,PointLight& light) {
 
 	//计算阴影贴图
 	for (int m = 0; m < models.size(); m++) {
-		DepthShader depthshader(&light.lightMatrix);
+		DepthShader depthshader(&light.lightMatrix,&light.lightCamera);
 		VerInf faceVer[3];
 		modelNow = &models[m];
 		for (int i = 0; i < modelNow->nfaces(); i++) {
@@ -590,13 +575,11 @@ void drawPointLightPos(Model& cube, std::vector<PointLight>& lights, const ViewP
 	//启动正面剔除
 	enableFaceCulling = true;
 
-
 	//绘制zbuffer
-	
 	modelNow = &cube;
 	VerInf faceVer[3];
 	for (int m = 0; m < lights.size(); m++) {
-		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1, 0.1, 0.1);
+		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1f, 0.1f, 0.1f);
 		MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
 		PointLightShader shader(&lights[m]);
@@ -656,7 +639,7 @@ int main(int argc, char** argv) {
 		scene.push_back(diablo);
 		//创建相机
 		ViewPort defaultViewPort(Vec2i(0, 0), SCREEN_WIDTH, SCREEN_HEIGHT);
-		defaultCamera = Camera(&defaultViewPort, 0.3, 10, 60);
+		defaultCamera = Camera(&defaultViewPort, 0.3f, 10.0f, 60.0f);
 
 
 		//初始化矩阵
@@ -705,8 +688,8 @@ int main(int argc, char** argv) {
 		float angle = 0;
 
 		//初始化摄像机
-		Vec3f camPos(1.5, 0.8, 2);
-		Vec3f camCenter = center + Vec3f(-1,-0.2,0);
+		Vec3f camPos(1.5f, 0.8f, 2.0f);
+		Vec3f camCenter = center + Vec3f(-1.0f, -0.2f, 0.0f);
 		camPos = camPos*0.8;
 		defaultCamera.setCamera(camPos, camCenter, up);
 		
@@ -750,14 +733,14 @@ int main(int argc, char** argv) {
 			ModelMatrix = Matrix::identity();
 			ViewMatrix = defaultCamera.getViewMatrix();
 			ProjectionMatrix = defaultCamera.getProjMatrix();
-			MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+			Matrix cameraMat = ProjectionMatrix * ViewMatrix;
+			MVP = cameraMat * ModelMatrix;
+
 			normalMatrix = ModelMatrix.invert_transpose();
 			//清空绘图区域
 			drawBuffer->fill(black);
 			////清空zbuffer
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
-
-			
 
 			//绘制光源位置
 			//drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
@@ -766,8 +749,6 @@ int main(int argc, char** argv) {
 			//drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
 			
 			//根据shadow map和SSAO绘制模型
-			
-			
 
 			Material m;
 			m.shininess = 250;
@@ -776,9 +757,10 @@ int main(int argc, char** argv) {
 			reflectSkyboxShader reflectShaderWithoutTextrue(&m, skyboxFaces);
 			LightAndShadowShader shaderWithTextrue(SSAOTexture, &pointlights, NULL);
 			LightAndShadowShader shaderWithoutTextrue(SSAOTexture, &pointlights, &m);
-
-			draw(diablo, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
-			draw(floor, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
+			
+			DepthShader depthshader(&cameraMat, &defaultCamera);
+			draw(diablo, shaderWithoutTextrue, defaultViewPort, drawBuffer,  zbuffer);
+			draw(floor, shaderWithTextrue, defaultViewPort, drawBuffer, zbuffer);
 			//draw(windowModel, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
 			
 			//绘制天空盒
