@@ -712,9 +712,9 @@ int main(int argc, char** argv) {
 		
 		//设置光源
 		std::vector<PointLight> pointlights;
-		pointlights.push_back(PointLight(Vec3f(-1, 1, 1),Vec3f(0.3, 1,0.3), 5.f, true));
-		pointlights.push_back(PointLight(Vec3f(1, 1, 1),Vec3f(1, 0.3, 0.3),5.f, true));
-		pointlights.push_back(PointLight(Vec3f(1, 3, 1),Vec3f(1, 1, 1), 10.f, true));
+		pointlights.push_back(PointLight(Vec3f(1, 3, 1), Vec3f(1, 1, 1), 10.f, true));
+		//pointlights.push_back(PointLight(Vec3f(-1, 1, 1),Vec3f(0.3, 1,0.3), 5.f, true));
+		//pointlights.push_back(PointLight(Vec3f(1, 1, 1),Vec3f(1, 0.3, 0.3),5.f, true));
 	
 		for (int i = 0; i < pointlights.size(); i++) {\
 			////光源旋转
@@ -760,15 +760,14 @@ int main(int argc, char** argv) {
 			
 
 			//绘制光源位置
-			drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
+			//drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
 
 			//绘制屏幕全局光照贴图
 			//drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
 			
 			//根据shadow map和SSAO绘制模型
 			
-			//绘制天空盒
-			drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
+			
 
 			Material m;
 			m.shininess = 250;
@@ -782,6 +781,9 @@ int main(int argc, char** argv) {
 			draw(floor, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
 			//draw(windowModel, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
 			
+			//绘制天空盒
+			drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
+
 			//交换缓存
 			temp = drawBuffer;
 			drawBuffer = showBuffer;
