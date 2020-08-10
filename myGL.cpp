@@ -159,19 +159,39 @@ inline Vec3f interpolate(Vec3f& a, Vec3f& b, Vec3f& c, Vec3f& weights) {
 }
 
 inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
-	if (v1.x > 1 || v1.x < -1)
+	Vec4f temp = v1 / v1.w;
+	if (temp.x > 1 || temp.x < -1)
 		return false;
-	if (v1.y > 1 || v1.y < -1)
-		return false;
-	if (v2.x > 1 || v2.x < -1)
-		return false;
-	if (v2.y > 1 || v2.y < -1)
+	if (temp.y > 1 || temp.y < -1)
 		return false;
 
-	if (v3.x > 1 || v3.x < -1)
+	temp = v2 / v2.w;
+	if (temp.x > 1 || temp.x < -1)
 		return false;
-	if (v3.y > 1 || v3.y < -1)
+	if (temp.y > 1 || temp.y < -1)
 		return false;
+
+	temp = v3 / v3.w;
+	if (temp.x > 1 || temp.x < -1)
+		return false;
+	if (temp.y > 1 || temp.y < -1)
+		return false;
+
+	//if (v1.x > 1 || v1.x < -1)
+	//	return false;
+	//if (v1.y > 1 || v1.y < -1)
+	//	return false;
+
+
+	//if (v2.x > 1 || v2.x < -1)
+	//	return false;
+	//if (v2.y > 1 || v2.y < -1)
+	//	return false;
+
+	//if (v3.x > 1 || v3.x < -1)
+	//	return false;
+	//if (v3.y > 1 || v3.y < -1)
+	//	return false;
 	return true;
 }
 
@@ -188,6 +208,13 @@ inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3, flo
 		return true;
 	return false;
 }
+
+//https://zhuanlan.zhihu.com/p/102758967
+//在NDC中，一点 P [x/w, y/w, z/w] 与平面 Ax+By+Cz+D=0（法向量n=[A,B,C]） 
+//的距离d = Ax/w + By/w + Cz/w + D
+//若 d>0则在平面法向量所指区域内，
+//d=0在平面上，d<0在另一侧区域。
+//所有等式两次同乘w，d * w = Ax + By + Cz + Dw，依然是 d * w > 0就在我们要的区域内
 
 // Ax + By + Cz + D > 0 就与法向量同侧
 const Vec4f ViewLines[] = {
@@ -211,6 +238,8 @@ inline bool Inside(const Vec4f& line, const Vec4f& p) {
 	return (line.x * p.x * rw + line.y * p.y * rw + line.z * p.z * rw + line.w) > 0;*/
 	return (line.x * p.x + line.y * p.y + line.z * p.z + line.w * p.w) >= 0;
 }
+
+//da*aw / (da*aw - db*bw)
 inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
 	float da = v1.clip_coord.x * line.x + v1.clip_coord.y * line.y + v1.clip_coord.z * line.z + line.w * v1.clip_coord.w;
 	float db = v2.clip_coord.x * line.x + v2.clip_coord.y * line.y + v2.clip_coord.z * line.z + line.w * v2.clip_coord.w;
