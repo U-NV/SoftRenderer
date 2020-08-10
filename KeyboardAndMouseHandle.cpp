@@ -1,10 +1,12 @@
 #include "KeyboardAndMouseHandle.h"
 
-KeyboardAndMouseHandle::KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera)
+KeyboardAndMouseHandle::KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera, float* gamma, float* exposure)
 {
 	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 	MousePosNow = Vec2f(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 	controlCamera = camera;
+	this->gamma = gamma;
+	this->exposure = exposure;
 }
 
 void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
@@ -30,6 +32,22 @@ void KeyboardAndMouseHandle::handlerKeyboardEvent(float deltaTime)
 	}
 	if (keysEvent[SDLK_q]) {
 		controlCamera->moveVertical(-cameraSpeed);
+	}
+	
+	if (keysEvent[SDLK_COMMA]) { //<
+		*gamma -= 0.05;
+		std::cout << "Gamma:" << *gamma << std::endl;
+	}if (keysEvent[SDLK_PERIOD]) {//>
+		*gamma += 0.05;
+		std::cout << "Gamma:" << *gamma << std::endl;
+	}
+	
+	if (keysEvent[SDLK_LEFTBRACKET]) { //"["
+		*exposure -= 0.05;
+		std::cout << "exposure:" << *exposure << std::endl;
+	}if (keysEvent[SDLK_RIGHTBRACKET]) {//']'
+		*exposure += 0.05;
+		std::cout << "exposure:" << *exposure << std::endl;
 	}
 
 	if (rightKeyPress || leftKeyPress) {

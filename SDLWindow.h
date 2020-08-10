@@ -17,8 +17,10 @@ class SDLWindow
 	//inline void drawPixel(int& x, int& y, const int& width, const int& height, Frame* drawBuffer);
 public:
 	bool initSuccess;
+
+	float screenGamma;
 	//构造函数调用init
-	SDLWindow(const char* name,const int SCREEN_WIDTH, const int SCREEN_HEIGHT);
+	SDLWindow(const char* name,const int SCREEN_WIDTH, const int SCREEN_HEIGHT, float screenGamma);
 	//关闭SDL窗口
 	void close();
 	//更新窗口内容

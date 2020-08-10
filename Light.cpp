@@ -65,7 +65,7 @@ Vec3f PointLight::calcLightColor(const Vec3f& normal, const  Vec3f& worldPos, co
 
 	//计算该点在不在阴影区域
 	if (enableShadow) {
-		float bias = std::max(0.1 * (1.0 - diff), 0.005);
+		float bias = std::max(0.01 * (1.0 - diff), 0.001);
 		return (diffColor + specColor) * beIlluminated(worldPos, bias);
 	}
 	else {

@@ -25,7 +25,7 @@ Camera::Camera(ViewPort* targetViewPort,float near = 0.1f,float far = 20,float f
 	FAR = far;
 	FOVY = fovy;
 	this->targetViewPort = targetViewPort;
-	aspect = targetViewPort->v_width/targetViewPort->v_height;
+	aspect = float(targetViewPort->v_width) / targetViewPort->v_height;
 	ProjectionMode = true;
 	if(ProjectionMode)
 		ProjectionMatrix = setFrustum(FOVY * DegToRad, aspect, NEAR, FAR);

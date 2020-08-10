@@ -15,6 +15,7 @@ extern Matrix ModelMatrix;
 extern Matrix ViewMatrix;
 extern Matrix ProjectionMatrix;
 extern Matrix MVP;
+extern Matrix normalMatrix;
 
 extern bool enableFaceCulling;
 extern bool enableFrontFaceCulling;
@@ -112,4 +113,6 @@ void triangle(VerInf* vertexs, IShader& shader,
 	const ViewPort& port, const float& near, const float& far,
 	double* zbuffer, Frame* drawBuffer,
 	bool farme, bool fog);
+
+Vec3f reflect(Vec3f& I, Vec3f& N);
 #endif // !__MY_GL__

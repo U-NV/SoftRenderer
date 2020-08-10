@@ -6,7 +6,7 @@ Matrix ModelMatrix;
 Matrix ViewMatrix;
 Matrix ProjectionMatrix;
 Matrix MVP;
-
+Matrix normalMatrix;
 bool enableFaceCulling;
 bool enableFrontFaceCulling;
 
@@ -35,17 +35,18 @@ inline VerInf VerInf::verLerp(const VerInf& v1, const VerInf& v2, const float& f
 	return result;
 }
 
-inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, Vec4f* drawBuffer) {
-	int bufferInd = x + y * 600;
-	drawBuffer[bufferInd].x = color[2];
-	drawBuffer[bufferInd].y = color[1];
-	drawBuffer[bufferInd].z = color[0];
-	drawBuffer[bufferInd].w = color[3];
-}
+//inline void setPixelBuffer(const int& x, const  int& y, const int& width, const int& height, TGAColor& color, Vec4f* drawBuffer) {
+//	int bufferInd = x + y * 600;
+//	drawBuffer[bufferInd].x = color[2];
+//	drawBuffer[bufferInd].y = color[1];
+//	drawBuffer[bufferInd].z = color[0];
+//	drawBuffer[bufferInd].w = color[3];
+//}
 
 inline Vec4f blendColor(Vec4f& newColor, Vec4f& oldColor) {
-	float alpha = newColor.z;
+	float alpha = newColor.w;
 	newColor = newColor * alpha + oldColor * (1 - alpha);
+	newColor.w = 1;
 	return newColor;
 }
 
@@ -123,10 +124,10 @@ void draw2DFrame(VerInf** vertexs, TGAColor& color, const ViewPort& port, Frame*
 	drawLine(screen_coords[2], screen_coords[0], color, port.v_width, port.v_height, drawBuffer);
 }
 
-inline Vec3f calculate_weights(Vec2i& A, Vec2i& B, Vec2i& C, Vec2i& P) {
+inline Vec3f calculate_weights(Vec2f& A, Vec2f& B, Vec2f& C, Vec2i& P) {
 	Vec2f ab = B - A;//  = b - a;
 	Vec2f ac = C - A;//  = c - a;
-	Vec2f ap = P - A;//  = p - a;
+	Vec2f ap(P.x - A.x, P.y - A.y);//  = p - a;
 
 	double factor = 1 / (ab.x * ac.y - ab.y * ac.x);
 	double s = ((double)ac.y * ap.x - (double)ac.x * ap.y) * factor;
@@ -249,7 +250,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	const float& near, const float& far,
 	double* zbuffer, Frame* drawBuffer,
 	bool fog) {
-	Vec2i screen_coords[3];
+
+	Vec2f screen_coords[3];
 	double screen_depths[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
@@ -263,11 +265,11 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	Vec2i bboxClamp(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
 
 	for (int i = 0; i < 3; i++) {
-		bboxmin.x = std::max(0, std::min(bboxmin.x, screen_coords[i].x));
-		bboxmin.y = std::max(0, std::min(bboxmin.y, screen_coords[i].y));
+		bboxmin.x = std::max(0, std::min<int>(bboxmin.x, screen_coords[i].x));
+		bboxmin.y = std::max(0, std::min<int>(bboxmin.y, screen_coords[i].y));
 
-		bboxmax.x = std::min(bboxClamp.x, std::max(bboxmax.x, screen_coords[i].x));
-		bboxmax.y = std::min(bboxClamp.y, std::max(bboxmax.y, screen_coords[i].y));
+		bboxmax.x = std::min(bboxClamp.x, std::max<int>(bboxmax.x, screen_coords[i].x));
+		bboxmax.y = std::min(bboxClamp.y, std::max<int>(bboxmax.y, screen_coords[i].y));
 	}
 
 	Vec2i P(0, 0);
@@ -317,8 +319,8 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 						//	color[3] = (1 - rate) * 255;
 						//}
 						//进行alpha混合
-						//Vec4f colorNow = drawBuffer->getPixel(P[0], P[1]);//(drawBuffer[zbufferInd].x, drawBuffer[zbufferInd].y, drawBuffer[zbufferInd].z, drawBuffer[zbufferInd].w);
-						//color = blendColor(color, colorNow);
+						Vec4f* colorNow = drawBuffer->getPixel(P[0], P[1]);
+						color = blendColor(color, *colorNow);
 						//写入绘制buffer
 						drawBuffer->setPixel(P[0], P[1], color);
 						//setPixelBuffer(P[0], P[1], port.v_width, port.v_height, color, drawBuffer);
@@ -501,39 +503,40 @@ Matrix projection(double width, double height, double zNear, double zFar) {
 	return projection;
 }
 
-Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f pos) {
-	int maxDir = fabs(pos.x) > fabs(pos.y) ? 0 : 1;
-	maxDir = fabs(pos[maxDir]) > fabs(pos.z) ? maxDir : 2;
-	if (pos[maxDir] < 0)maxDir = maxDir * 2 + 1;
+Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f dir) {
+	int maxDir = fabs(dir.x) > fabs(dir.y) ? 0 : 1;
+	maxDir = fabs(dir[maxDir]) > fabs(dir.z) ? maxDir : 2;
+	dir = dir * abs(1 / dir[maxDir]);
+	if (dir[maxDir] < 0)maxDir = maxDir * 2 + 1;
 	else maxDir *= 2;
 	float screen_coord[2];
 	for (int i = 0; i < 3; i++) {
-		pos[i] = (pos[i] + 1) * 0.5;
+		dir[i] = (dir[i] + 1) * 0.5;
 	}
 	switch (maxDir) {
 	case 0://+x
-		screen_coord[0] = 1 - pos.z;
-		screen_coord[1] = 1 - pos.y;
+		screen_coord[0] = 1 - dir.z;
+		screen_coord[1] = 1 - dir.y;
 		break;
 	case 1://-x
-		screen_coord[0] = pos.z;
-		screen_coord[1] = 1 - pos.y;
+		screen_coord[0] = dir.z;
+		screen_coord[1] = 1 - dir.y;
 		break;
 	case 2://+y
-		screen_coord[0] = 1 - pos.x;
-		screen_coord[1] = 1 - pos.z;
+		screen_coord[0] = dir.x;
+		screen_coord[1] = dir.z;
 		break;
 	case 3://-y
-		screen_coord[0] = 1 - pos.x;
-		screen_coord[1] = pos.z;
+		screen_coord[0] = dir.x;
+		screen_coord[1] = 1 - dir.z;
 		break;
 	case 4://+z
-		screen_coord[0] = pos.x;
-		screen_coord[1] = 1 - pos.y;
+		screen_coord[0] = dir.x;
+		screen_coord[1] = 1 - dir.y;
 		break;
 	case 5://-z
-		screen_coord[0] = 1 - pos.x;
-		screen_coord[1] = 1 - pos.y;
+		screen_coord[0] = 1 - dir.x;
+		screen_coord[1] = 1 - dir.y;
 		break;
 	}
 	screen_coord[0] = screen_coord[0] - (float)floor(screen_coord[0]);
@@ -598,3 +601,8 @@ void Frame::fill(const Vec4f& defaultColor)
 	std::fill(buffer, buffer + f_width * f_height, defaultColor);
 }
 
+//https://www.cnblogs.com/bluebean/p/5299358.html
+Vec3f reflect(Vec3f& I, Vec3f& N) {
+	Vec3f V =  N * 2 * (N * (-1) * I);
+	return (I + V * 1.45);
+}

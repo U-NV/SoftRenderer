@@ -20,9 +20,13 @@ private:
 	Vec2f MousePosPre;
 
 	Camera* controlCamera;
+
+	float* gamma;
+	float* exposure;
+
 public:
 	bool SDL_Runing;
-	KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera);
+	KeyboardAndMouseHandle(int SCREEN_WIDTH, int SCREEN_HEIGHT, Camera* camera,float* gamma,float* exposure);
 
 	void handlerKeyboardEvent(float deltaTime);
 	int getMouseKeyEven(void* opaque, float deltaTime);

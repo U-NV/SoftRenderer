@@ -12,19 +12,26 @@ wasd前后左右
 qe上下  
 鼠标右键按住拖动移动视角  
 鼠标滚轮改变fov  
+<>键位控制屏幕gamma
+[]控制曝光
 
 # 实现功能
 MVP矩阵变换  
 自定义shader  
+镜面shader
 视锥剔除/齐次裁切/背面剔除  
-深度测试
-摄像机运动  
+深度测试  
+摄像机运动    
 obj模型导入  
 透明混合  
 Blinn–Phong反射模型  
-阴影贴图（Shadow mapping）
-简单的SSAO
-天空盒
+阴影贴图（Shadow mapping）  
+多个带阴影贴图的不同颜色的光源  
+简单的SSAO  
+天空盒  
+HDR映射  
+
+
 
 >数学库、贴图、模型导入的代码 与 所有的obj模型来自
 https://github.com/ssloy/tinyrenderer  

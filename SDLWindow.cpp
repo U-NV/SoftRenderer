@@ -2,6 +2,7 @@
 #include "myGL.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
 
 inline void SDLWindow::init(const char* name,const int  SCREEN_WIDTH, const int SCREEN_HEIGHT)
 {
@@ -50,10 +51,23 @@ inline void SDLWindow::init(const char* name,const int  SCREEN_WIDTH, const int 
 //	SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
 //}
 
-SDLWindow::SDLWindow(const char* name, const int SCREEN_WIDTH, const int SCREEN_HEIGHT)
+void ApplySurface(int x, int y, SDL_Surface* pSrc, SDL_Surface* pDest)
+{
+	SDL_Rect rect;
+
+	rect.x = x;
+	rect.y = y;
+	rect.w = pSrc->w;
+	rect.h = pSrc->h;
+
+	SDL_BlitSurface(pSrc, NULL, pDest, &rect);
+}
+
+SDLWindow::SDLWindow(const char* name, const int SCREEN_WIDTH, const int SCREEN_HEIGHT,float screenGamma)
 {
 	width = SCREEN_WIDTH;
 	height = SCREEN_HEIGHT;
+	this->screenGamma = screenGamma;
 	init(name, width, height);
 }
 
@@ -77,17 +91,24 @@ void SDLWindow::refresh(Frame* buffer)
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			int bufferInd = x + y * width;
-			Vec4f* temp = buffer->getPixel(x, y);
+			Vec4f* hdrColor = buffer->getPixel(x, y);
 			//SDL_SetRenderDrawColor(gRenderer,
 			//	(temp->x - int(temp->x)) * 255,
 			//	(temp->y - int(temp->y)) * 255, 
 			//	(temp->z - int(temp->z)) * 255, 
 			//	(temp->w - int(temp->w)) * 255);
+
+			// use the gamma corrected color in the fragment
+			for (int i = 0; i < 3; i++) {
+				// GammaÐ£Õý
+				(*hdrColor)[i] = pow((*hdrColor)[i], 1.0f / screenGamma);
+			}
+
 			SDL_SetRenderDrawColor(gRenderer,
-int(temp->x * 255),
-int(temp->y * 255), 
-int(temp->z * 255), 
-int(temp->w * 255));
+			int(hdrColor->x * 255),
+			int(hdrColor->y * 255),
+			int(hdrColor->z * 255),
+			int(hdrColor->w * 255));
 			SDL_RenderDrawPoint(gRenderer, x, height - 1 - y);
 		}
 	}
