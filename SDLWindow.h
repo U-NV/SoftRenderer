@@ -6,8 +6,8 @@
 
 class SDLWindow
 {
-	unsigned int width;
-	unsigned int height;
+	int width;
+	int height;
 	//The window we'll be rendering to
 	SDL_Window* gWindow = NULL;
 	//The window renderer

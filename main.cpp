@@ -10,7 +10,7 @@
 #include "Light.h"
 
 //#pragma comment(lib,"SDL2_ttf.dll")
-#include "SDL_ttf.h"
+//#include "SDL_ttf.h"
 //Screen dimension constants
 const int SCREEN_WIDTH = 500;
 const int SCREEN_HEIGHT = 300;
