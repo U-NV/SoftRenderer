@@ -178,9 +178,9 @@ struct LightAndShadowShader : public IShader {
 		Vec2f uv = verInf.uv;
 		TGAColor tgaDiff = modelNow->diffuse(uv);
 		//插值法向量
-		//Vec3f normal = verInf.normal;
+		Vec3f normal = verInf.normal;
 		//使用法线贴图
-		Vec3f normal = modelNow->normal(uv);
+		//Vec3f normal = modelNow->normal(uv);
 		normal.normalize();
 
 		//设定材质
@@ -200,7 +200,7 @@ struct LightAndShadowShader : public IShader {
 		
 		//计算环境光
 		float ambient = (*SAAOTexture->getPixel(verInf.screen_coord.x, verInf.screen_coord.y)).x;
-		ambient = clamp(ambient, 0.2f, 0.5f);
+		//ambient = clamp(ambient, 0.2f, f);
 		Vec3f ambientColor(1, 1, 1);
 		ambientColor = colorMulit(ambientColor, Mat->diffuse) * ambient;
 
@@ -293,6 +293,36 @@ struct skyboxShader : public IShader {
 	}
 };
 
+inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer,bool farme = false,bool fog = false) {
+	VerInf faceVer[3];
+	modelNow = &modle;
+	for (int i = 0; i < modelNow->nfaces(); i++) {
+		for (int j = 0; j < 3; j++) {
+			shader.vertex(i, j, faceVer[j]);
+		}
+		triangle(faceVer, shader, //传入顶点数据和shader
+			port,//传入屏幕大小用于视窗变换
+			defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
+			zbuffer, drawBuffer,//传入绘制buffer
+			farme,//是否绘制线框模型
+			fog//是否绘雾
+		);
+	}
+}
+void drawPointLightPos(Model& cube, std::vector<PointLight>& lights, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
+	//启动正面剔除
+	enableFaceCulling = true;
+	//绘制zbuffer
+	modelNow = &cube;
+	for (int m = 0; m < lights.size(); m++) {
+		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1f, 0.1f, 0.1f);
+		MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+		PointLightShader shader(&lights[m]);
+		drawSingleModle(cube, shader, port, drawBuffer, zbuffer, false, false);
+	}
+	ModelMatrix = Matrix::identity();
+	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
+}
 float max_elevation_angle(double* zbuffer, float radio, float near, float far, Vec2f& p, Vec2f& dir) {
 	float maxangle = 0;
 	//double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far);
@@ -300,13 +330,11 @@ float max_elevation_angle(double* zbuffer, float radio, float near, float far, V
 	for (float t = 0.; t < radio; t += 1.) {
 		Vec2f cur = p + dir * t;
 		if (cur.x >= SCREEN_WIDTH || cur.y >= SCREEN_HEIGHT || cur.x < 0 || cur.y < 0) return maxangle;
-
 		float distance = (p - cur).norm();
 		//if (distance < 1.f) continue;
-		double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];// LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far);
+		double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
 		//double nearZ =  LinearizeDepth(zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH], near, far);
 		//if (abs(orgZ - nearZ) >= 0.2)continue;
-		//double nearZ = zbuffer[int(cur.x) + int(cur.y) * SCREEN_WIDTH];
 		//float elevation = nearZ/ far - orgZ / far;
 		float elevation = float(nearZ - orgZ);
 		//if (elevation >= 0.2) continue;
@@ -314,45 +342,9 @@ float max_elevation_angle(double* zbuffer, float radio, float near, float far, V
 	}
 	return maxangle;
 }
-
-//float deepSampling(double* zbuffer, int radio, float near, float far, Vec2f& p) {
-//	double orgZ = LinearizeDepth(zbuffer[int(p.x) + int(p.y) * SCREEN_WIDTH], near, far)/ far;
-//	//std::cout << "orgZ" << orgZ << std::endl;
-//	float max = 0;
-//	int count = 0;
-//	for (int x = -radio; x <= radio; x += 1) {
-//		for (int y = -radio; y <= radio; y += 1) {
-//			int tempX = clamp<int>(p.x + x, 0, SCREEN_WIDTH-1);
-//			int tempY = clamp<int>(p.y + y, 0, SCREEN_HEIGHT-1);
-//			float diff = LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far)/ far - orgZ;
-//			if (abs(diff) > 0.001)diff = 0;
-//			max = abs(diff)> abs(max)?diff:max;
-//			//if (orgZ < 0.98) {
-//			//	std::cout << "orgZ(" << int(p.x) << "," << int(p.y) << "):" << orgZ << std::endl;
-//			//	std::cout << "near(" << tempX << "," << tempY << "):" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far << std::endl;
-//			//	std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-//			//	std::cout << "sum" << sum << std::endl;
-//			//}
-//			
-//			//std::cout << "diff" << LinearizeDepth(zbuffer[tempX + tempY * SCREEN_WIDTH], near, far) / far - orgZ << std::endl;
-//			//std::cout << "sum" << sum << std::endl;
-//			count++;
-//		}
-//	}
-//	//std::cout << "Sampling num" << count << std::endl;
-//	//std::cout << "totle num" << sum << std::endl;
-//	//sum /= float((radio * 2 + 1) * (radio * 2 + 1));
-//	max = max*100 +0.5f;
-//	//sum = pow(sum, 2);
-//	//std::cout << "deepSampling" << sum << std::endl << std::endl;
-//	return max;
-//}
-
 void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zbuffer, Frame* SSAOTexture) {
 	//清空drawbuffer，绘制新的画面
 	SSAOTexture->fill(white);
-	//std::fill(SSAOTexture, SSAOTexture + SCREEN_WIDTH * SCREEN_HEIGHT, white);
-
 	float far = defaultCamera.getFar();
 	float near = defaultCamera.getNear();
 
@@ -362,33 +354,9 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 	//绘制zbuffer
 	for (int m = 0; m < models.size(); m++) {
 		SSAOShader shader;
-		VerInf faceVer[3];
-		modelNow = &models[m];
-		for (int i = 0; i < modelNow->nfaces(); i++) {
-			for (int j = 0; j < 3; j++) {
-				shader.vertex(i, j, faceVer[j]);
-			}
-			triangle(faceVer, shader, //传入顶点数据和shader
-				port,//传入屏幕大小用于视窗变换
-				near, far, //传入透视远近平面用于裁切和线性zbuffer
-				zbuffer, SSAOTexture,//传入绘制buffer
-				false,//是否绘制线框模型
-				false//是否绘雾
-			);
-		}
+		drawSingleModle(models[m], shader, port, SSAOTexture, zbuffer, false, false);
 	}
-	//Vec2f posNow(0, 0);
-	//for (posNow.x = 0; posNow.x < SCREEN_WIDTH-1; posNow.x++) {
-	//	for (posNow.y = 0; posNow.y < SCREEN_HEIGHT-1; posNow.y++) {
-	//		int id = posNow.x + posNow.y * SCREEN_WIDTH;
-	//		float sample = deepSampling(zbuffer, 1, near, far, posNow);
-	//		sample = clamp<float>(sample, 0, 1);
-	//		SSAOTexture[id].x = sample * 255;
-	//		SSAOTexture[id].y = sample * 255;
-	//		SSAOTexture[id].z = sample * 255;
-	//		SSAOTexture[id].w = 255;
-	//	}
-	//}
+
 	//计算SAAO
 	float halfPI = (float)M_PI / 2.0f;
 	int samplingDir = 4;
@@ -415,10 +383,10 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 			total /= halfPI * samplingDir;
 			total = pow(total, 1000.f);
 			
-			temp.x = total * 255;
-			temp.y = total * 255;
-			temp.z = total * 255;
-			temp.w = 255;
+			temp.x = total;
+			temp.y = total;
+			temp.z = total;
+			temp.w = 1;
 
 			int x = (int)posNow.x;
 			int y = (int)posNow.y;
@@ -430,7 +398,6 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 }
 
 Frame* shadowTexture = new Frame(SHADOW_WIDTH, SHADOW_HEIGHT);
-Matrix lightTemp;
 void drawShadowMap(std::vector<Model>& models,PointLight& light) {
 	if (light.enableShadow == false)return;
 	if (light.ShadowPort == NULL) {
@@ -463,22 +430,9 @@ void drawShadowMap(std::vector<Model>& models,PointLight& light) {
 	enableFaceCulling = false;
 
 	//计算阴影贴图
+	DepthShader depthshader(&light.lightMatrix, &light.lightCamera);
 	for (int m = 0; m < models.size(); m++) {
-		DepthShader depthshader(&light.lightMatrix,&light.lightCamera);
-		VerInf faceVer[3];
-		modelNow = &models[m];
-		for (int i = 0; i < modelNow->nfaces(); i++) {
-			for (int j = 0; j < 3; j++) {
-				depthshader.vertex(i, j, faceVer[j]);
-			}
-			triangle(faceVer, depthshader,//传入顶点数据和shader
-					*light.ShadowPort,//传入屏幕大小用于视窗变换
-					light.lightCamera.getNear(), light.lightCamera.getFar(),//传入透视远近平面用于裁切和线性zbuffer
-					light.depthBuffer, shadowTexture,//传入绘制buffer
-					false,//是否绘制线框模型
-					false//是否绘雾
-					);
-		}
+		drawSingleModle(models[m], depthshader, *light.ShadowPort, shadowTexture, light.depthBuffer, false, false);
 	}
 	//启动背面剔除
 	enableFaceCulling = true;
@@ -491,21 +445,7 @@ void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,
 	enableZTest = false;
 	//绘制模型的三角面片
 	skyboxShader skyboxShader(skyboxFaces);
-	VerInf faceVer[3];
-	modelNow = &skyboxModle;
-	for (int i = 0; i < modelNow->nfaces(); i++) {
-		for (int j = 0; j < 3; j++) {
-			skyboxShader.vertex(i, j, faceVer[j]);
-		}
-		triangle(faceVer, skyboxShader, //传入顶点数据和shader
-			port,//传入屏幕大小用于视窗变换
-			defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
-			zbuffer, drawBuffer,//传入绘制buffer
-			false,//是否绘制线框模型
-			false//是否绘雾
-		);
-
-	}
+	drawSingleModle(skyboxModle, skyboxShader, port, drawBuffer, zbuffer, false, false);
 	enableZTest = true;
 	enableZWrite = true;
 	enableFaceCulling = true;
@@ -521,21 +461,7 @@ void draw(Model& model, IShader& shader, const ViewPort& port, Frame* drawBuffer
 	enableZWrite = true;
 
 	//绘制模型的三角面片
-
-		VerInf faceVer[3];
-		modelNow = &model;
-		for (int i = 0; i < modelNow->nfaces(); i++) {
-			for (int j = 0; j < 3; j++) {
-				shader.vertex(i, j, faceVer[j]);
-			}
-			triangle(faceVer, shader, //传入顶点数据和shader
-					port,//传入屏幕大小用于视窗变换
-					defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
-					zbuffer, drawBuffer,//传入绘制buffer
-					false,//是否绘制线框模型
-					false//是否绘雾
-				);
-		}
+	drawSingleModle(model, shader, port, drawBuffer, zbuffer, false, false);
 	
 }
 
@@ -549,59 +475,12 @@ void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Fra
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		VerInf faceVer[3];
-		modelNow = &models[m];
-		for (int i = 0; i < modelNow->nfaces(); i++) {
-			for (int j = 0; j < 3; j++) {
-				shader.vertex(i, j, faceVer[j]);
-			}
-			triangle(faceVer, shader, //传入顶点数据和shader
-				port,//传入屏幕大小用于视窗变换
-				defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
-				zbuffer, drawBuffer,//传入绘制buffer
-				false,//是否绘制线框模型
-				false//是否绘雾
-			);
-		}
+		drawSingleModle(models[m], shader, port, drawBuffer, zbuffer, false, false);
 	}
-	
-
-}
-
-void drawPointLightPos(Model& cube, std::vector<PointLight>& lights, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
-	float far = defaultCamera.getFar();
-	float near = defaultCamera.getNear();
-
-	//启动正面剔除
-	enableFaceCulling = true;
-
-	//绘制zbuffer
-	modelNow = &cube;
-	VerInf faceVer[3];
-	for (int m = 0; m < lights.size(); m++) {
-		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1f, 0.1f, 0.1f);
-		MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
-
-		PointLightShader shader(&lights[m]);
-		for (int i = 0; i < modelNow->nfaces(); i++) {
-			for (int j = 0; j < 3; j++) {
-				shader.vertex(i, j, faceVer[j]);
-			}
-			triangle(faceVer, shader, //传入顶点数据和shader
-				port,//传入屏幕大小用于视窗变换
-				near, far, //传入透视远近平面用于裁切和线性zbuffer
-				zbuffer, drawBuffer,//传入绘制buffer
-				false,//是否绘制线框模型
-				false//是否绘雾
-			);
-		}
-	}
-	ModelMatrix = Matrix::identity();
-	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 }
 
 //#define showShadow
-//#define showSSAO
+#define showSSAO
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow mainWindow("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT, screenGamma);
@@ -609,7 +488,7 @@ int main(int argc, char** argv) {
 	SDLWindow shadow("shadow", SHADOW_WIDTH, SHADOW_HEIGHT, 1);
 #endif // showShadow
 #ifdef showSSAO
-	SDLWindow SSAO("SSAO", SCREEN_WIDTH, SCREEN_HEIGHT);
+	SDLWindow SSAO("SSAO", SCREEN_WIDTH, SCREEN_HEIGHT,1);
 #endif // showSSAO
 
 	//监听键鼠事件
@@ -695,7 +574,7 @@ int main(int argc, char** argv) {
 		
 		//设置光源
 		std::vector<PointLight> pointlights;
-		pointlights.push_back(PointLight(Vec3f(1, 3, 1), Vec3f(1, 1, 1), 10.f, true));
+		pointlights.push_back(PointLight(Vec3f(2, 1, -2), Vec3f(1, 1, 1), 10.f, true));
 		//pointlights.push_back(PointLight(Vec3f(-1, 1, 1),Vec3f(0.3, 1,0.3), 5.f, true));
 		//pointlights.push_back(PointLight(Vec3f(1, 1, 1),Vec3f(1, 0.3, 0.3),5.f, true));
 	
@@ -743,10 +622,10 @@ int main(int argc, char** argv) {
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
 			//绘制光源位置
-			//drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
+			drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
 
 			//绘制屏幕全局光照贴图
-			//drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
+			drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
 			
 			//根据shadow map和SSAO绘制模型
 
@@ -759,8 +638,8 @@ int main(int argc, char** argv) {
 			LightAndShadowShader shaderWithoutTextrue(SSAOTexture, &pointlights, &m);
 			
 			DepthShader depthshader(&cameraMat, &defaultCamera);
-			draw(diablo, shaderWithoutTextrue, defaultViewPort, drawBuffer,  zbuffer);
-			draw(floor, shaderWithTextrue, defaultViewPort, drawBuffer, zbuffer);
+			draw(diablo, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
+			draw(floor, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
 			//draw(windowModel, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
 			
 			//绘制天空盒

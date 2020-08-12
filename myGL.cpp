@@ -14,8 +14,9 @@ bool enableFrontFaceCulling;
 bool enableZTest;
 bool enableZWrite;
 
-TGAColor white(255, 255, 255, 255);
-TGAColor red = TGAColor(255, 0, 0, 255);
+//TGAColor white(255, 255, 255, 255);
+Vec4f white(1.0f, 1.0f, 1.0f, 1.0f);
+//TGAColor red = TGAColor(255, 0, 0, 255);
 
 double LinearizeDepth(double depth, float near_plane, float far_plane)
 {
@@ -50,7 +51,7 @@ inline Vec4f blendColor(Vec4f& newColor, Vec4f& oldColor) {
 	return newColor;
 }
 
-void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int height, Frame* drawBuffer) {
+void drawLine(int x0, int y0, int x1, int y1, Vec4f& color, int width, int height, Frame* drawBuffer) {
 	x0 = clamp(x0, 0, width-1);
 	x1 = clamp(x1, 0, width-1);
 
@@ -79,8 +80,6 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int he
         }
         else {
 			drawBuffer->setPixel(x, y, color);
-			//setPixelBuffer(x, y, width, height, color, drawBuffer);
-			//SDLDrawPixel(gRenderer, gWindow, x, y, color);
         }
         error2 += derror2;
         if (error2 > dx) {
@@ -89,10 +88,10 @@ void drawLine(int x0, int y0, int x1, int y1, TGAColor& color, int width, int he
         }
     }
 }
-void drawLine(Vec2i& a, Vec2i& b, TGAColor& color, int width, int height, Frame* drawBuffer) {
+void drawLine(Vec2i& a, Vec2i& b, Vec4f& color, int width, int height, Frame* drawBuffer) {
     drawLine(a.x, a.y, b.x, b.y, color, width,height, drawBuffer);
 }
-void drawLine(Vec3f& a, Vec3f& b, TGAColor& color, int width, int height, Frame* drawBuffer) {
+void drawLine(Vec3f& a, Vec3f& b, Vec4f& color, int width, int height, Frame* drawBuffer) {
 	drawLine((int)a.x, (int)a.y, (int)b.x, (int)b.y, color, width, height, drawBuffer);
 }
 
@@ -111,14 +110,14 @@ inline bool is_back_facing(Vec3f&a, Vec3f& b, Vec3f& c ) {
 	else
 		return signed_area >= 0;
 }
-void draw2DFrame(VerInf** vertexs, TGAColor& color, const ViewPort& port, Frame* drawBuffer) {
+void draw2DFrame(VerInf** vertexs, Vec4f& color, const ViewPort& port, Frame* drawBuffer) {
 	Vec2i screen_coords[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
 		Vec3f window_coord = port.transform(vertexs[i]->ndc_coord);
 		screen_coords[i] = Vec2i((int)window_coord[0], (int)window_coord[1]);
+		//std::cout << "screen_coords" << screen_coords[i] <<std::endl;
 	}
-
 	drawLine(screen_coords[0], screen_coords[1], color, port.v_width, port.v_height, drawBuffer);
 	drawLine(screen_coords[1], screen_coords[2], color, port.v_width, port.v_height, drawBuffer);
 	drawLine(screen_coords[2], screen_coords[0], color, port.v_width, port.v_height, drawBuffer);
@@ -257,17 +256,17 @@ std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const
 		std::vector<VerInf> input(output);
 		output.clear();
 		for (int j = 0; j < input.size(); j++) {
-			VerInf current = input[j];
-			VerInf last = input[(j + input.size() - 1) % input.size()];
-			if (Inside(ViewLines[i], current.clip_coord)) {
-				if (!Inside(ViewLines[i], last.clip_coord)) {
-					VerInf intersecting = Intersect(last, current, ViewLines[i]);
+			VerInf P = input[j];
+			VerInf S = input[(j + input.size() - 1) % input.size()];
+			if (Inside(ViewLines[i], P.clip_coord)) {
+				if (!Inside(ViewLines[i], S.clip_coord)) {
+					VerInf intersecting = Intersect(S, P, ViewLines[i]);
 					output.push_back(intersecting);
 				}
-				output.push_back(current);
+				output.push_back(P);
 			}
-			else if (Inside(ViewLines[i], last.clip_coord)) {
-				VerInf intersecting = Intersect(last, current, ViewLines[i]);
+			else if (Inside(ViewLines[i], S.clip_coord)) {
+				VerInf intersecting = Intersect(S, P, ViewLines[i]);
 				output.push_back(intersecting);
 			}
 		}
@@ -390,8 +389,9 @@ void triangle(VerInf* vertexs, IShader& shader,
 		if (enableFaceCulling && is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
 			return;
 		}
-		if (farme)
+		if (farme) {
 			draw2DFrame(verList, white, port, drawBuffer);
+		}
 		else
 			drawTriangle2D(verList, shader, port, near,far, zbuffer, drawBuffer, fog);
 	}
@@ -593,21 +593,21 @@ Frame::Frame(int w, int h)
 {
 	f_width = w;
 	f_height = h;
-	buffer = new Vec4f[f_width * f_height];
+	buffer = new Vec4f[(__int64)f_width * f_height];
 }
 
 Frame::~Frame()
 {
 	delete[] buffer;
 }
-void Frame::setPixel(int& x, int& y, TGAColor& color)
-{
-	int bufferInd = x + y * f_width;
-	buffer[bufferInd].x = color[2];
-	buffer[bufferInd].y = color[1];
-	buffer[bufferInd].z = color[0];
-	buffer[bufferInd].w = color[3];
-}
+//void Frame::setPixel(int& x, int& y, TGAColor& color)
+//{
+//	int bufferInd = x + y * f_width;
+//	buffer[bufferInd].x = color[2];
+//	buffer[bufferInd].y = color[1];
+//	buffer[bufferInd].z = color[0];
+//	buffer[bufferInd].w = color[3];
+//}
 
 void Frame::setPixel(int& x, int& y, Vec4f& color)
 {
