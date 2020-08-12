@@ -280,12 +280,14 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	bool fog) {
 
 	Vec2f screen_coords[3];
+	Vec2i screen_coords_int[3];
 	double screen_depths[3];
 	/* viewport mapping */
 	for (int i = 0; i < 3; i++) {
 		Vec3f window_coord = port.transform(verInf[i]->ndc_coord);
-		screen_coords[i] = Vec2i(int(window_coord.x+0.5), int(window_coord.y+0.5));
-		screen_depths[i] = window_coord.z;
+		screen_coords[i] = Vec2f(window_coord.x, window_coord.y);
+		screen_coords_int[i] = Vec2i(screen_coords[i].x + 0.5f, screen_coords[i].y + 0.5f);
+		screen_depths[i] = (double)window_coord.z;
 	}
 
 	Vec2i bboxmin(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
@@ -293,11 +295,11 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	Vec2i bboxClamp(drawBuffer->f_width - 1, drawBuffer->f_height - 1);
 
 	for (int i = 0; i < 3; i++) {
-		bboxmin.x = std::max(0, std::min<int>(bboxmin.x, (int)screen_coords[i].x));
-		bboxmin.y = std::max(0, std::min<int>(bboxmin.y, (int)screen_coords[i].y));
+		bboxmin.x = std::max(0, std::min<int>(bboxmin.x, screen_coords_int[i].x));
+		bboxmin.y = std::max(0, std::min<int>(bboxmin.y, screen_coords_int[i].y));
 
-		bboxmax.x = std::min(bboxClamp.x, std::max<int>(bboxmax.x, (int)screen_coords[i].x));
-		bboxmax.y = std::min(bboxClamp.y, std::max<int>(bboxmax.y, (int)screen_coords[i].y));
+		bboxmax.x = std::min(bboxClamp.x, std::max<int>(bboxmax.x, screen_coords_int[i].x));
+		bboxmax.y = std::min(bboxClamp.y, std::max<int>(bboxmax.y, screen_coords_int[i].y));
 	}
 
 	Vec2i P(0, 0);
