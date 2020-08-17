@@ -15,8 +15,8 @@ inline float Light::beIlluminated(const Vec3f& world_pos, double bias) {
 	//变换到阴影贴图的范围
 	Vec3f shadowTextureCoords = ShadowPort->transform(ndcLightSpace);
 	//从缓存中得到最近的深度
-	int x = clamp((int)shadowTextureCoords.x, 0, ShadowPort->v_width - 1);
-	int y = clamp((int)shadowTextureCoords.y, 0, ShadowPort->v_height - 1);
+	int x = clamp(static_cast<int>(shadowTextureCoords.x+0.5f), 0, ShadowPort->v_width - 1);
+	int y = clamp(static_cast<int>(shadowTextureCoords.y + 0.5f), 0, ShadowPort->v_height - 1);
 	int id = x + y * ShadowPort->v_width;
 	double closestDepth = depthBuffer[id];
 
