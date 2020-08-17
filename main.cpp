@@ -13,8 +13,8 @@
 //#pragma comment(lib,"SDL2_ttf.dll")
 //#include "SDL_ttf.h"
 //Screen dimension constants
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
+const int SCREEN_WIDTH = 500;
+const int SCREEN_HEIGHT = 400;
 const int SHADOW_WIDTH = 1000, SHADOW_HEIGHT = 1000;
 
 
@@ -30,8 +30,8 @@ const Vec4f ambientColor(1, 1, 1, 1);
 const Vec4f white(1, 1, 1, 1);
 const Vec4f black(0, 0, 0, 1);
 
-float screenGamma = 1.0f;
-float exposure = 1.0f;
+float screenGamma = 0.8f;
+float exposure = 0.9f;
 //光源位置
 //Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
 //Vec3f lightPos(2.2, 3.5, 2);//黑人头
@@ -105,6 +105,7 @@ struct reflectSkyboxShader : public IShader {
 		TGAColor tgaDiff = modelNow->diffuse(uv);
 		//插值法向量
 		Vec3f normal = verInf.normal;
+		//Vec3f normal = modelNow->normal(uv);
 		normal.normalize();
 
 		//设定材质
@@ -180,9 +181,9 @@ struct LightAndShadowShader : public IShader {
 		Vec2f uv = verInf.uv;
 		TGAColor tgaDiff = modelNow->diffuse(uv);
 		//插值法向量
-		Vec3f normal = verInf.normal;
+		//Vec3f normal = verInf.normal;
 		//使用法线贴图
-		//Vec3f normal = modelNow->normal(uv);
+		Vec3f normal = modelNow->normal(uv);
 		normal.normalize();
 
 		//设定材质
@@ -295,7 +296,7 @@ struct skyboxShader : public IShader {
 	}
 };
 
-inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer,bool farme = false, bool fog = false) {
+inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer, RendererMode mode = RendererMode::fragment, bool fog = false) {
 	VerInf faceVer[3];
 	modelNow = &modle;
 	for (int i = 0; i < modelNow->nfaces(); i++) {
@@ -306,7 +307,7 @@ inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port,
 			port,//传入屏幕大小用于视窗变换
 			defaultCamera.getNear(), defaultCamera.getFar(), //传入透视远近平面用于裁切和线性zbuffer
 			zbuffer, drawBuffer,//传入绘制buffer
-			farme,//是否绘制线框模型
+			mode,//是否绘制线框模型
 			fog//是否绘雾
 		);
 	}
@@ -320,7 +321,7 @@ void drawPointLightPos(Model& cube, std::vector<PointLight>& lights, const ViewP
 		ModelMatrix = translate(lights[m].lightPos.x, lights[m].lightPos.y, lights[m].lightPos.z) * scale(0.1f, 0.1f, 0.1f);
 		MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 		PointLightShader shader(&lights[m]);
-		drawSingleModle(cube, shader, port, drawBuffer, zbuffer, false, false);
+		drawSingleModle(cube, shader, port, drawBuffer, zbuffer, RendererMode::fragment, false);
 	}
 	ModelMatrix = Matrix::identity();
 	MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
@@ -356,7 +357,7 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 	//绘制zbuffer
 	for (int m = 0; m < models.size(); m++) {
 		SSAOShader shader;
-		drawSingleModle(models[m], shader, port, SSAOTexture, zbuffer, false, false);
+		drawSingleModle(models[m], shader, port, SSAOTexture, zbuffer, RendererMode::fragment, false);
 	}
 
 	////计算SAAO
@@ -434,7 +435,7 @@ void drawShadowMap(std::vector<Model>& models,PointLight& light) {
 	//计算阴影贴图
 	DepthShader depthshader(&light.lightMatrix, &light.lightCamera);
 	for (int m = 0; m < models.size(); m++) {
-		drawSingleModle(models[m], depthshader, *light.ShadowPort, shadowTexture, light.depthBuffer, false, false);
+		drawSingleModle(models[m], depthshader, *light.ShadowPort, shadowTexture, light.depthBuffer, RendererMode::fragment, false);
 	}
 	//启动背面剔除
 	enableFaceCulling = true;
@@ -447,37 +448,25 @@ void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,
 	enableZTest = false;
 	//绘制模型的三角面片
 	skyboxShader skyboxShader(skyboxFaces);
-	drawSingleModle(skyboxModle, skyboxShader, port, drawBuffer, zbuffer, false, false);
+	drawSingleModle(skyboxModle, skyboxShader, port, drawBuffer, zbuffer, RendererMode::fragment, false);
 	enableZTest = true;
 	enableZWrite = true;
 	enableFaceCulling = true;
 }
 
 //void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
-void draw(Model& model, bool farme, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
-	//清空drawbuffer和zbuffer，绘制新的画面
-	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
-	//enableFaceCulling = true;
-	//enableFrontFaceCulling = false;
-	enableZTest = true;
-	enableZWrite = true;
+void draw(Model& model, RendererMode mode, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
 
 	//绘制模型的三角面片
-	drawSingleModle(model, shader, port, drawBuffer, zbuffer, farme, false);
+	drawSingleModle(model, shader, port, drawBuffer, zbuffer, mode, false);
 	
 }
 
-void draw(std::vector<Model>& models, bool farme, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
-	//清空drawbuffer和zbuffer，绘制新的画面
-	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
-	enableFaceCulling = true;
-	enableFrontFaceCulling = false;
-	enableZTest = true;
-	enableZWrite = true;
+void draw(std::vector<Model>& models, RendererMode mode, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		drawSingleModle(models[m], shader, port, drawBuffer, zbuffer, farme, false);
+		drawSingleModle(models[m], shader, port, drawBuffer, zbuffer, mode, false);
 	}
 }
 
@@ -520,8 +509,12 @@ int main(int argc, char** argv) {
 		scene.push_back(diablo);
 		//创建相机
 		ViewPort defaultViewPort(Vec2i(0, 0), SCREEN_WIDTH, SCREEN_HEIGHT);
-		defaultCamera = Camera(&defaultViewPort, 0.3f, 10.0f, 60.0f);
-
+		defaultCamera = Camera(&defaultViewPort, 0.3f, 13.0f, 60.0f);
+		//初始化摄像机
+		Vec3f camPos(1.5f, 0.8f, 2.0f);
+		Vec3f camCenter = center + Vec3f(-1.0f, -0.2f, 0.0f);
+		camPos = camPos * 0.8;
+		defaultCamera.setCamera(camPos, camCenter, up);
 
 		//初始化矩阵
 		ViewMatrix = Matrix::identity();
@@ -568,17 +561,13 @@ int main(int argc, char** argv) {
 		int timer = 0;
 		float angle = 0;
 
-		//初始化摄像机
-		Vec3f camPos(1.5f, 0.8f, 2.0f);
-		Vec3f camCenter = center + Vec3f(-1.0f, -0.2f, 0.0f);
-		camPos = camPos*0.8;
-		defaultCamera.setCamera(camPos, camCenter, up);
+		
 		
 		//设置光源
 		std::vector<PointLight> pointlights;
-		pointlights.push_back(PointLight(Vec3f(2, 1, -2), Vec3f(1, 1, 1), 10.f, true));
-		//pointlights.push_back(PointLight(Vec3f(-1, 1, 1),Vec3f(0.3, 1,0.3), 5.f, true));
-		//pointlights.push_back(PointLight(Vec3f(1, 1, 1),Vec3f(1, 0.3, 0.3),5.f, true));
+		pointlights.push_back(PointLight(Vec3f(1.3, 2.0f, 1), Vec3f(1, 1, 1), 10.f, true));
+		//pointlights.push_back(PointLight(Vec3f(-1, 1, 1),Vec3f(0.3, 1,0.3), 5.f, false));
+		//pointlights.push_back(PointLight(Vec3f(1, 1, 1),Vec3f(0.3, 0.3, 1),5.f, false));
 	
 		for (int i = 0; i < pointlights.size(); i++) {\
 			////光源旋转
@@ -624,12 +613,16 @@ int main(int argc, char** argv) {
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
 			//绘制光源位置
-			//drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
+			drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
 
 			//绘制屏幕全局光照贴图
 			//drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
 			
 			//根据shadow map和SSAO绘制模型
+			enableFaceCulling = true;
+			enableFrontFaceCulling = false;
+			enableZTest = true;
+			enableZWrite = true;
 
 			Material m;
 			m.shininess = 250;
@@ -640,8 +633,10 @@ int main(int argc, char** argv) {
 			LightAndShadowShader shaderWithoutTextrue(SSAOTexture, &pointlights, &m);
 			
 			DepthShader depthshader(&cameraMat, &defaultCamera);
-			draw(diablo,true, diffuseTexture, defaultViewPort, drawBuffer,  zbuffer);
-			draw(floor,true, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
+
+			RendererMode mode = RendererMode::fragment;
+			draw(diablo, mode, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
+			draw(floor, mode, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
 		/*	draw(diablo, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
 			draw(floor, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
 		*/	
@@ -649,7 +644,7 @@ int main(int argc, char** argv) {
 			//draw(windowModel, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
 			
 			//绘制天空盒
-			//drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
+			drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
 
 			//交换缓存
 			temp = drawBuffer;

@@ -254,7 +254,7 @@ inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
 }
 std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const VerInf& v3, float near, float far) {
 	std::vector<VerInf> output = { v1,v2,v3 };
-
+	//return output;
 	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord,near,far)) {
 		return output;
 	}
@@ -292,7 +292,7 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 	for (int i = 0; i < 3; i++) {
 		Vec3f window_coord = port.transform(verInf[i]->ndc_coord);
 		screen_coords[i] = Vec2f(window_coord.x, window_coord.y);
-		screen_coords_int[i] = Vec2i(screen_coords[i].x + 0.5f, screen_coords[i].y + 0.5f);
+		screen_coords_int[i] = Vec2i(static_cast<int>(screen_coords[i].x + 0.5f), static_cast<int>(screen_coords[i].y + 0.5f));
 		screen_depths[i] = (double)window_coord.z;
 	}
 
@@ -372,12 +372,13 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 void triangle(VerInf* vertexs, IShader& shader,
 	const ViewPort& port, const float& near, const float& far,
 	double* zbuffer, Frame* drawBuffer,
-	bool farme, bool fog) {
+	RendererMode mode, bool fog) {
+	VerInf* verList[3];
+
 	if (!inClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord, near,far)) {
 		return;
 	}
 
-	VerInf *verList[3];
 	std::vector<VerInf> clipingVertexs = SutherlandHodgeman(vertexs[0], vertexs[1], vertexs[2], near, far);
 
 	/* perspective division */
@@ -395,11 +396,22 @@ void triangle(VerInf* vertexs, IShader& shader,
 		if (enableFaceCulling && is_back_facing(verList[0]->ndc_coord, verList[1]->ndc_coord, verList[2]->ndc_coord)) {
 			return;
 		}
-		if (farme) {
-			draw2DFrame(verList, white, port, drawBuffer);
+
+		switch (mode) {
+			case RendererMode::line:
+				draw2DFrame(verList, white, port, drawBuffer);
+				break;
+			case RendererMode::fragment:
+				drawTriangle2D(verList, shader, port, near, far, zbuffer, drawBuffer, fog);
+				break;
+			case RendererMode::both:
+				drawTriangle2D(verList, shader, port, near, far, zbuffer, drawBuffer, fog);
+				draw2DFrame(verList, white, port, drawBuffer);
+				break;
+			default:
+				drawTriangle2D(verList, shader, port, near, far, zbuffer, drawBuffer, fog);
+				break;
 		}
-		else
-			drawTriangle2D(verList, shader, port, near,far, zbuffer, drawBuffer, fog);
 	}
 
 }

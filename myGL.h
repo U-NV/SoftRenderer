@@ -60,6 +60,12 @@ struct IShader {
     virtual bool fragment(VerInf& verInf, Vec4f& color) = 0;
 };
 
+enum class RendererMode {
+	line,
+	fragment,
+	both,
+};
+
 //Ä£ÐÍ¾ØÕó
 Matrix translate(float x, float y, float z);
 Matrix rotate(Vec3f& axis, float theta);
@@ -92,7 +98,7 @@ class Frame
 public:
 	Frame(int w,int h);
 	~Frame();
-	void setPixel(int& x, int& y, TGAColor& color);
+	//void setPixel(int& x, int& y, TGAColor& color);
 	void setPixel(int& x, int& y, Vec4f& color);
 
 	Vec4f* getPixel(int& x, int& y);
@@ -112,7 +118,7 @@ Vec4f CubeMap(TGAImage* skyboxFaces, Vec3f pos);
 void triangle(VerInf* vertexs, IShader& shader,
 	const ViewPort& port, const float& near, const float& far,
 	double* zbuffer, Frame* drawBuffer,
-	bool farme, bool fog);
+	RendererMode mode, bool fog);
 
 Vec3f reflect(Vec3f& I, Vec3f& N);
 #endif // !__MY_GL__
