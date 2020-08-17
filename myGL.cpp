@@ -157,26 +157,32 @@ inline Vec3f interpolate(Vec3f& a, Vec3f& b, Vec3f& c, Vec3f& weights) {
 	);
 }
 
-inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) {
-	Vec4f temp = v1 / v1.w;
-	if (temp.x > 1 || temp.x < -1)
+inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3, float near, float far) {
+	Vec4f temp = v1;// / v1.w;
+	if (temp.w < near || temp.w>far)
 		return false;
-	if (temp.y > 1 || temp.y < -1)
+	if (temp.x > temp.w || temp.x < -temp.w)
 		return false;
-
-	temp = v2 / v2.w;
-	if (temp.x > 1 || temp.x < -1)
-		return false;
-	if (temp.y > 1 || temp.y < -1)
+	if (temp.y > temp.w || temp.y < -temp.w)
 		return false;
 
-	temp = v3 / v3.w;
-	if (temp.x > 1 || temp.x < -1)
+	temp = v2;// / v2.w;
+	if (temp.w < near || temp.w>far)
 		return false;
-	if (temp.y > 1 || temp.y < -1)
+	if (temp.x > temp.w || temp.x < -temp.w)
+		return false;
+	if (temp.y > temp.w || temp.y < -temp.w)
 		return false;
 
-	//if (v1.x > 1 || v1.x < -1)
+	temp = v3;// / v3.w;
+	if (temp.w < near || temp.w>far)
+		return false;
+	if (temp.x > temp.w || temp.x < -temp.w)
+		return false;
+	if (temp.y > temp.w || temp.y < -temp.w)
+		return false;
+
+	//if (vtemp.w.x > 1 || v1.x < -1)
 	//	return false;
 	//if (v1.y > 1 || v1.y < -1)
 	//	return false;
@@ -194,11 +200,11 @@ inline bool AllVertexsInside(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3) 
 	return true;
 }
 
-inline bool ClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3, float near, float far) {
+inline bool inClipSpaceCull(const Vec4f& v1, const Vec4f& v2, const Vec4f& v3, float near, float far) {
 	if (v1.w < near && v2.w < near && v3.w < near)
-		return false;
+		return true;
 	if (v1.w > far && v2.w > far && v3.w > far)
-		return false;
+		return true;
 	if (fabs(v1[0]) <= fabs(v1.w) || fabs(v1[1]) <= fabs(v1.w) || fabs(v1[2]) <= fabs(v1.w))
 		return true;
 	if (fabs(v2[0]) <= fabs(v2.w) || fabs(v2[1]) <= fabs(v2.w) || fabs(v2[2]) <= fabs(v2.w))
@@ -246,10 +252,10 @@ inline VerInf Intersect(const VerInf& v1, const VerInf& v2, const Vec4f& line) {
 	float weight = da / (da - db);
 	return VerInf::verLerp(v1, v2, weight);
 }
-std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const VerInf& v3) {
+std::vector<VerInf> SutherlandHodgeman(const VerInf& v1, const VerInf& v2, const VerInf& v3, float near, float far) {
 	std::vector<VerInf> output = { v1,v2,v3 };
 
-	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord)) {
+	if (AllVertexsInside(v1.clip_coord, v2.clip_coord, v3.clip_coord,near,far)) {
 		return output;
 	}
 	for (int i = 0; i <6; i++) {
@@ -319,8 +325,6 @@ void drawTriangle2D(VerInf** verInf, IShader& shader,const ViewPort& port,
 				if (enableZTest)
 					frag_depth = interpolate_depth(screen_depths, weights);
 				temp.depth = frag_depth;
-
-
 				if (frag_depth <= zbuffer[zbufferInd]) {
 					//透视投影纠正
 					for (int i = 0; i < 3; i++) weights[i] = weights[i] * (float)verInf[i]->recip_w;
@@ -369,12 +373,12 @@ void triangle(VerInf* vertexs, IShader& shader,
 	const ViewPort& port, const float& near, const float& far,
 	double* zbuffer, Frame* drawBuffer,
 	bool farme, bool fog) {
-	if (!ClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord, near,far)) {
+	if (!inClipSpaceCull(vertexs[0].clip_coord, vertexs[1].clip_coord, vertexs[2].clip_coord, near,far)) {
 		return;
 	}
 
 	VerInf *verList[3];
-	std::vector<VerInf> clipingVertexs = SutherlandHodgeman(vertexs[0], vertexs[1], vertexs[2]);
+	std::vector<VerInf> clipingVertexs = SutherlandHodgeman(vertexs[0], vertexs[1], vertexs[2], near, far);
 
 	/* perspective division */
 	for (int i = 0; i < clipingVertexs.size(); i++) {

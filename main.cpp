@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <time.h>
+#include <Thread>
 #include "myGL.h"
 #include "model.h"
 #include "KeyboardAndMouseHandle.h"
@@ -12,10 +13,11 @@
 //#pragma comment(lib,"SDL2_ttf.dll")
 //#include "SDL_ttf.h"
 //Screen dimension constants
-const int SCREEN_WIDTH = 500;
-const int SCREEN_HEIGHT = 300;
-
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
 const int SHADOW_WIDTH = 1000, SHADOW_HEIGHT = 1000;
+
+
 //位置相关参数
 Vec3f up(0, 1, 0);
 Vec3f right(1, 0, 0);
@@ -28,7 +30,7 @@ const Vec4f ambientColor(1, 1, 1, 1);
 const Vec4f white(1, 1, 1, 1);
 const Vec4f black(0, 0, 0, 1);
 
-float screenGamma = 0.8f;
+float screenGamma = 1.0f;
 float exposure = 1.0f;
 //光源位置
 //Vec3f lightPos(2, 1, -1);//暗黑破坏神光源
@@ -266,7 +268,7 @@ struct SSAOShader : public IShader {
 	}
 
 	virtual bool fragment(VerInf& verInf, Vec4f& color) {
-		color = Vec4f(0, 0, 0,1);
+		color = Vec4f(1, 1, 1,1);
 		return false;
 	}
 };
@@ -293,7 +295,7 @@ struct skyboxShader : public IShader {
 	}
 };
 
-inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer,bool farme = false,bool fog = false) {
+inline void drawSingleModle(Model& modle, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer,bool farme = false, bool fog = false) {
 	VerInf faceVer[3];
 	modelNow = &modle;
 	for (int i = 0; i < modelNow->nfaces(); i++) {
@@ -357,7 +359,7 @@ void drawSSAOTexture(std::vector<Model>& models,const ViewPort& port, double* zb
 		drawSingleModle(models[m], shader, port, SSAOTexture, zbuffer, false, false);
 	}
 
-	//计算SAAO
+	////计算SAAO
 	float halfPI = (float)M_PI / 2.0f;
 	int samplingDir = 4;
 	float dirChangeAlmont = (float)M_PI * 2.0f/samplingDir;
@@ -452,7 +454,7 @@ void drawSkybox(Model& skyboxModle, const ViewPort& port, TGAImage* skyboxFaces,
 }
 
 //void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
-void draw(Model& model, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
+void draw(Model& model, bool farme, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	//enableFaceCulling = true;
@@ -461,11 +463,11 @@ void draw(Model& model, IShader& shader, const ViewPort& port, Frame* drawBuffer
 	enableZWrite = true;
 
 	//绘制模型的三角面片
-	drawSingleModle(model, shader, port, drawBuffer, zbuffer, false, false);
+	drawSingleModle(model, shader, port, drawBuffer, zbuffer, farme, false);
 	
 }
 
-void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
+void draw(std::vector<Model>& models, bool farme, IShader& shader, const ViewPort& port, Frame* drawBuffer, double* zbuffer) {
 	//清空drawbuffer和zbuffer，绘制新的画面
 	//std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 	enableFaceCulling = true;
@@ -475,12 +477,12 @@ void draw(std::vector<Model>& models, IShader& shader, const ViewPort& port, Fra
 
 	//绘制模型的三角面片
 	for (int m = 0; m < models.size(); m++) {
-		drawSingleModle(models[m], shader, port, drawBuffer, zbuffer, false, false);
+		drawSingleModle(models[m], shader, port, drawBuffer, zbuffer, farme, false);
 	}
 }
 
 //#define showShadow
-#define showSSAO
+//#define showSSAO
 int main(int argc, char** argv) {
 	//创建视窗
 	SDLWindow mainWindow("SoftRenderer",SCREEN_WIDTH, SCREEN_HEIGHT, screenGamma);
@@ -622,10 +624,10 @@ int main(int argc, char** argv) {
 			std::fill(zbuffer, zbuffer + SCREEN_WIDTH * SCREEN_HEIGHT, 1);
 
 			//绘制光源位置
-			drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
+			//drawPointLightPos(cube, pointlights, defaultViewPort, drawBuffer, zbuffer);
 
 			//绘制屏幕全局光照贴图
-			drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
+			//drawSSAOTexture(scene, defaultViewPort, zbuffer, SSAOTexture);
 			
 			//根据shadow map和SSAO绘制模型
 
@@ -638,12 +640,16 @@ int main(int argc, char** argv) {
 			LightAndShadowShader shaderWithoutTextrue(SSAOTexture, &pointlights, &m);
 			
 			DepthShader depthshader(&cameraMat, &defaultCamera);
-			draw(diablo, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
+			draw(diablo,true, diffuseTexture, defaultViewPort, drawBuffer,  zbuffer);
+			draw(floor,true, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
+		/*	draw(diablo, shaderWithTextrue, defaultViewPort, drawBuffer,  zbuffer);
 			draw(floor, shaderWithoutTextrue, defaultViewPort, drawBuffer, zbuffer);
+		*/	
+		
 			//draw(windowModel, diffuseTexture, defaultViewPort, drawBuffer, zbuffer);
 			
 			//绘制天空盒
-			drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
+			//drawSkybox(cube, defaultViewPort, skyboxFaces, drawBuffer, zbuffer);
 
 			//交换缓存
 			temp = drawBuffer;
